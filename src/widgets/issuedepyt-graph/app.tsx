@@ -22,6 +22,7 @@ import type { IssueInfo, IssueLink, Relation, Relations, DirectionType } from ".
 import exportData from "./export";
 import DepGraph from "./dep-graph";
 import DepTimeline from "./dep-timeline";
+import DepEstimationGraph from "./dep-estimation-graph";
 import IssueInfoCard from "./issue-info-card";
 import OptionsDropdownMenu from "./options-dropdown-menu";
 import VerticalSizeControl from "./vertical-size-control";
@@ -117,6 +118,8 @@ const AppComponent: React.FunctionComponent = () => {
   });
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
   const [timelineVisible, setTimelineVisible] = useState<boolean>(false);
+  const [workEstimationTimelineVisible, setWorkEstimationTimelineVisible] =
+    useState<boolean>(false);
   const [graphHeight, setGraphHeight] = useState<number>(400);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [maxNodeWidth, setMaxNodeWidth] = useState<number>(DEFAULT_MAX_NODE_WIDTH);
@@ -160,7 +163,7 @@ const AppComponent: React.FunctionComponent = () => {
       setGraphHeight(calcGraphSizeFromIssues(issues));
       setIssueData(issues);
       // Set selected node to the root issue if none selected alrady.
-      setSelectedNode((oldId) => oldId === null ? issueInfo.id : oldId);
+      setSelectedNode((oldId) => (oldId === null ? issueInfo.id : oldId));
 
       setLoading(false);
     } else {
@@ -346,14 +349,24 @@ const AppComponent: React.FunctionComponent = () => {
                   }
                   theme={Theme.LIGHT}
                 >
-                  <Toggle
-                    size={ToggleSize.Size14}
-                    checked={timelineVisible}
-                    onChange={(e: any) => setTimelineVisible(e.target.checked)}
-                    disabled={!settings?.dueDateField}
-                  >
-                    Show timeline
-                  </Toggle>
+                  <Group>
+                    <Toggle
+                      size={ToggleSize.Size14}
+                      checked={timelineVisible}
+                      onChange={(e: any) => setTimelineVisible(e.target.checked)}
+                      disabled={!settings?.dueDateField}
+                    >
+                      Show timeline
+                    </Toggle>
+                    <Toggle
+                      size={ToggleSize.Size14}
+                      checked={workEstimationTimelineVisible}
+                      onChange={(e: any) => setWorkEstimationTimelineVisible(e.target.checked)}
+                      disabled={!settings?.dueDateField}
+                    >
+                      Show work estimation
+                    </Toggle>
+                  </Group>
                 </Tooltip>
                 <span className="extra-margin-left">
                   <Tooltip
@@ -392,6 +405,16 @@ const AppComponent: React.FunctionComponent = () => {
           </div>
           {timelineVisible && Object.keys(issueData).length > 0 && (
             <DepTimeline
+              issues={issueData}
+              selectedIssueId={selectedNode}
+              fieldInfo={fieldInfo}
+              maxNodeWidth={maxNodeWidth}
+              setSelectedNode={setSelectedNode}
+              onOpenNode={openNode}
+            />
+          )}
+          {workEstimationTimelineVisible && Object.keys(issueData).length > 0 && (
+            <DepEstimationGraph
               issues={issueData}
               selectedIssueId={selectedNode}
               fieldInfo={fieldInfo}
