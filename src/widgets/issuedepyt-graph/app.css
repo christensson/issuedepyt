@@ -185,6 +185,69 @@ div.dep-graph {
   margin-bottom: calc(var(--ring-unit) / 2);
 }
 
+div.dep-estimation-graph {
+  margin-top: calc(var(--ring-unit) / 2);
+  margin-bottom: calc(var(--ring-unit) / 2);
+}
+
+/** Custom styles for groups in estimation graph. */
+.vis-bar {
+  stroke-width: 1px;
+  fill-opacity: 0.8;
+  stroke-opacity: 0.8;
+}
+.dep-est-graph-group-label {
+  font-size: var(--ring-font-size-smaller);
+  fill: var(--ring-text-color);
+  fill-opacity: 1;
+}
+.dep-est-graph-group-0 {
+  stroke-width: 1px;
+  fill: var(--yt-palette-10-bg);
+  stroke: var(--yt-palette-10-bg);
+}
+.dep-est-graph-group-1 {
+  stroke-width: 1px;
+  fill: var(--yt-palette-11-bg);
+  stroke: var(--yt-palette-11-bg);
+}
+.dep-est-graph-group-2 {
+  stroke-width: 1px;
+  fill: var(--yt-palette-12-bg);
+  stroke: var(--yt-palette-12-bg);
+}
+.dep-est-graph-group-3 {
+  stroke-width: 1px;
+  fill: var(--yt-palette-13-bg);
+  stroke: var(--yt-palette-13-bg);
+}
+.dep-est-graph-group-4 {
+  stroke-width: 1px;
+  fill: var(--yt-palette-29-bg);
+  stroke: var(--yt-palette-29-bg);
+}
+.dep-est-graph-group-5 {
+  stroke-width: 1px;
+  fill: var(--yt-palette-20-bg);
+  stroke: var(--yt-palette-20-bg);
+}
+.dep-est-graph-group-6 {
+  stroke-width: 1px;
+  fill: var(--yt-palette-28-bg);
+  stroke: var(--yt-palette-28-bg);
+}
+.dep-est-graph-group-7 {
+  stroke-width: 1px;
+  fill: var(--yt-palette-30-bg);
+  stroke: var(--yt-palette-30-bg);
+}
+.dep-est-graph-group-totals {
+  fill-opacity: 0;
+  stroke-width: 2px;
+  fill: var(--yt-palette-31-bg);
+  stroke: var(--yt-palette-31-bg);
+}
+
 /* Style navigation controls to look OK in dark mode as well. */
 div.vis-network {
   background-color: white;
