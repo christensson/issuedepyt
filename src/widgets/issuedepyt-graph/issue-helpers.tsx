@@ -1,5 +1,6 @@
-import { IssueInfo, IssueLink } from "./issue-types";
+import { IssueInfo, IssueLink, IssuePeriod } from "./issue-types";
 import { FilterState } from "../../../@types/filter-state";
+import { calcBusinessDays } from "./time-utils";
 
 export const filterIssues = (filter: FilterState, issues: Record<string, IssueInfo>) => {
   const filteredIssues = Object.fromEntries(
@@ -45,4 +46,30 @@ export const filterIssues = (filter: FilterState, issues: Record<string, IssueIn
         issue.depth === 0 || relations.some((x) => x.from === issue.id || x.to === issue.id)
     )
   );
+};
+
+export const estimationToDays = (estimation: IssuePeriod): number => {
+  const WORK_HOURS_PER_DAY = 8;
+  if (estimation?.minutes) {
+    const days = estimation.minutes / (60 * WORK_HOURS_PER_DAY);
+    return days;
+  }
+  return 0;
+};
+
+export const getIssueWork = (
+  issue: IssueInfo
+): { estimatedDays: number; scheduledDays: number; workFactor: number } | null => {
+  const estimatedDays = estimationToDays(issue.estimation as IssuePeriod);
+  if (estimatedDays === 0) {
+    return null;
+  }
+  const startDate = issue.startDate as Date;
+  const dueDate = issue.dueDate as Date;
+  const scheduledDays = calcBusinessDays(startDate, dueDate);
+  if (scheduledDays === 0) {
+    return null;
+  }
+  const workFactor = estimatedDays / scheduledDays;
+  return { estimatedDays, scheduledDays, workFactor };
 };
