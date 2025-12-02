@@ -22,6 +22,8 @@ Visualization is performed using [vis.js] components [vis-network] and [vis-time
 [vis-network]: https://github.com/visjs/vis-network
 [vis-timeline]: https://github.com/visjs/vis-timeline
 
+![Honored YouTrack App Creator Badge](https://api.accredible.com/v1/frontend/credential_website_embed_image/badge/168044274)
+
 ## Screenshots
 
 ### Tree with issue preview open
