@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
 import Icon from "@jetbrains/ring-ui-built/components/icon/icon";
 import Group from "@jetbrains/ring-ui-built/components/group/group";
@@ -141,7 +141,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   const [maxNodeWidth, setMaxNodeWidth] = useState<number>(DEFAULT_MAX_NODE_WIDTH);
   const [maxDepth, setMaxDepth] = useState<number>(DEFAULT_MAX_DEPTH);
   const [useHierarchicalLayout, setUseHierarchicalLayout] = useState<boolean>(
-    DEFAULT_USE_HIERARCHICAL_LAYOUT
+    DEFAULT_USE_HIERARCHICAL_LAYOUT,
   );
   const [useDepthRendering, setUseDepthRendering] = useState<boolean>(DEFAULT_USE_DEPTH_RENDERING);
   const [fieldInfo, setFieldInfo] = useState<FieldInfo>({});
@@ -162,13 +162,13 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
   };
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     setLoading(true);
     console.log(`Fetching deps for ${issueId}...`);
     const { issue: issueInfo, fieldInfo: fieldInfoData } = await fetchIssueAndInfo(
       host,
       issueId,
-      settings
+      settings,
     );
     const followDirs: FollowDirections = [];
     if (followUpstream) {
@@ -184,6 +184,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       const height = calcGraphSizeFromIssues(issues);
       activateGraphHeight(height);
     }
+    console.log("Fetched issues (refresh):", issues);
     setIssueData(issues);
     // Remove highlight.
     setHighlightedNodes(null);
@@ -191,43 +192,62 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     setSelectedNode((oldId) => (oldId === null ? issueInfo.id : oldId));
 
     setLoading(false);
-  };
+  }, [
+    host,
+    issueId,
+    maxDepth,
+    relations,
+    settings,
+    followUpstream,
+    followDownstream,
+    useDynamicGraphHeight,
+  ]);
 
-  const loadIssueDeps = async (issueId: string, direction: FollowDirection | null = null) => {
-    console.log(`Fetching deps for ${issueId}...`);
-    setLoading(true);
-    const followDirs: FollowDirections = [];
-    if (direction === "upstream" || followUpstream) {
-      followDirs.push("upstream");
-    }
-    if (direction === "downstream" || followDownstream) {
-      followDirs.push("downstream");
-    }
-    const issues = await fetchDepsAndExtend(
-      host,
-      issueId,
-      issueData,
-      maxDepth,
-      relations,
-      followDirs,
-      settings
-    );
-    setIssueData(issues);
-    setLoading(false);
-  };
+  const loadIssueDeps = useCallback(
+    async (issueId: string, direction: FollowDirection | null = null) => {
+      console.log(`Fetching deps for ${issueId}...`);
+      setLoading(true);
+      const followDirs: FollowDirections = [];
+      if (direction === "upstream" || followUpstream) {
+        followDirs.push("upstream");
+      }
+      if (direction === "downstream" || followDownstream) {
+        followDirs.push("downstream");
+      }
+      const issues = await fetchDepsAndExtend(
+        host,
+        issueId,
+        issueData,
+        maxDepth,
+        relations,
+        followDirs,
+        settings,
+      );
+      setIssueData(issues);
+      setLoading(false);
+    },
+    [host, issueData, maxDepth, relations, settings, followUpstream, followDownstream],
+  );
 
-  const isSelectedNodeAnIssue = (nodeId: string | null): boolean => {
+  const isSelectedNodeAnIssue = (
+    nodeId: string | null,
+    issueData: { [key: string]: IssueInfo },
+  ): boolean => {
     if (nodeId === null) {
       return false;
     }
     return nodeId in issueData;
   };
 
-  const openNode = (nodeId: string) => {
-    if (isSelectedNodeAnIssue(nodeId)) {
-      open(`/issue/${nodeId}`);
-    }
-  };
+  const openNode = useCallback(
+    (nodeId: string) => {
+      if (isSelectedNodeAnIssue(nodeId, issueData)) {
+        console.log(`Opening issue ${nodeId}...`);
+        open(`/issue/${nodeId}`);
+      }
+    },
+    [issueData],
+  );
 
   useEffect(() => {
     if (settings?.maxRecursionDepth != undefined) {
@@ -337,7 +357,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                   loading
                     ? "Loading..."
                     : `Graph with ${getNumIssues(issueData)} nodes and a depth of ${getMaxDepth(
-                        issueData
+                        issueData,
                       )}.`
                 }
                 theme={Theme.LIGHT}
@@ -407,10 +427,8 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           onOpenNode={openNode}
         />
       )}
-      {selectedNode !== null && isSelectedNodeAnIssue(selectedNode) && (
-        <IssueInfoCard
-          issue={issueData[selectedNode]}
-        />
+      {selectedNode !== null && isSelectedNodeAnIssue(selectedNode, issueData) && (
+        <IssueInfoCard issue={issueData[selectedNode]} />
       )}
       {!isSinglePageApp && (
         <VerticalSizeControl

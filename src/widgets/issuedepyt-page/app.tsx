@@ -12,7 +12,7 @@ const entity = YTApp.entity;
 
 const AppComponent: React.FunctionComponent = () => {
   const [issueId, setIssueId] = useState<string | null>(
-    entity?.type === "issue" ? entity.id : null
+    entity?.type === "issue" ? entity.id : null,
   );
   const [settings, setSettings] = useState<Settings>({});
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
@@ -24,7 +24,7 @@ const AppComponent: React.FunctionComponent = () => {
     window.onresize = () => {
       document.documentElement.style.setProperty(
         "--window-height",
-        window.outerHeight.toString() + "px"
+        window.outerHeight.toString() + "px",
       );
     };
   }, []);

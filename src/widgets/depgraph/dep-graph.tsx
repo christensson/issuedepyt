@@ -1,11 +1,21 @@
-import React, { useEffect, useRef } from "react";
-import { DataSet } from "vis-data/peer/esm/vis-data.mjs";
-import { Network } from "vis-network/peer/esm/vis-network.mjs";
+import React, { useEffect, useRef, useCallback } from "react";
+import cytoscape, { Core, ElementDefinition, Css, use } from "cytoscape";
+// @ts-ignore - No TypeScript definitions available
+import dagre from "cytoscape-dagre";
+// @ts-ignore - No TypeScript definitions available
+import fcose from "cytoscape-fcose";
+// @ts-ignore - No TypeScript definitions available
+import nodeHtmlLabel from "cytoscape-node-html-label";
 import type { IssueInfo, IssueLink } from "./issue-types";
 import type { FieldInfo, FieldInfoField } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
 import { filterIssues } from "./issue-helpers";
 import { ColorPaletteItem, Color, hexToRgb, rgbToHex } from "./colors";
+
+// Register Cytoscape extensions
+cytoscape.use(dagre);
+cytoscape.use(fcose);
+nodeHtmlLabel(cytoscape);
 
 interface DepGraphProps {
   issues: { [id: string]: IssueInfo };
@@ -26,11 +36,11 @@ const FONT_FAMILY_MONOSPACE =
 
 const getColor = (
   state: string | undefined,
-  stateFieldInfo: FieldInfoField | undefined
+  stateFieldInfo: FieldInfoField | undefined,
 ): ColorPaletteItem | undefined => {
   if (stateFieldInfo && state) {
     const stateKey = Object.keys(stateFieldInfo.values).find(
-      (x) => x.toLowerCase() === state.toLowerCase()
+      (x) => x.toLowerCase() === state.toLowerCase(),
     );
     const colorEntry = stateKey != undefined ? stateFieldInfo.values[stateKey] : undefined;
     if (colorEntry) {
@@ -63,12 +73,12 @@ const getSelectedColor = (colorEntry: ColorPaletteItem): ColorPaletteItem => {
 const getNodeLabel = (issue: IssueInfo): string => {
   let lines = [];
   if (issue?.type) {
-    lines.push(`<i><< ${issue.type} >></i>`);
+    lines.push(`<< ${issue.type} >>`);
   }
 
   let summary = "" + issue.idReadable;
   if (issue?.summary) {
-    summary = `<b>${summary}: ${issue.summary}</b>`;
+    summary = `${summary}: ${issue.summary}`;
   }
   lines.push(summary);
 
@@ -89,6 +99,39 @@ const getNodeLabel = (issue: IssueInfo): string => {
   return lines.join("\n");
 };
 
+const getNodeHtmlLabel = (issue: IssueInfo): string => {
+  let lines = [];
+  if (issue?.type) {
+    lines.push(
+      `<div style="font-style: italic; font-size: 12px; text-align: center;">&lt;&lt; ${issue.type} &gt;&gt;</div>`,
+    );
+  }
+
+  let summary = "" + issue.idReadable;
+  if (issue?.summary) {
+    summary = `${summary}: ${issue.summary}`;
+  }
+  lines.push(
+    `<div style="font-weight: bold; font-size: 12px; text-align: center; max-width: 200px; word-wrap: break-word; white-space: normal;">${summary}</div>`,
+  );
+
+  let flags = [];
+  if (issue?.state) {
+    flags.push(issue.state);
+  }
+  if (issue.hasOwnProperty("assignee")) {
+    flags.push(issue?.assignee ? "Assigned" : "Unassigned");
+  }
+  if (issue?.sprints) {
+    flags.push(issue.sprints.length > 0 ? "Planned" : "Unplanned");
+  }
+  if (flags.length > 0) {
+    lines.push(`<div style="font-size: 12px; text-align: center;">${flags.join(", ")}</div>`);
+  }
+
+  return lines.join("<br/>");
+};
+
 const getNodeTooltip = (issue: IssueInfo): string => {
   let lines = [];
   lines.push(issue.idReadable);
@@ -104,7 +147,7 @@ const getNodeTooltip = (issue: IssueInfo): string => {
   if (issue?.sprints) {
     lines.push(
       "Sprints: " +
-        (issue.sprints.length > 0 ? issue.sprints.map((x) => x.name).join(", ") : "Unplanned")
+        (issue.sprints.length > 0 ? issue.sprints.map((x) => x.name).join(", ") : "Unplanned"),
     );
   }
   if (issue?.startDate) {
@@ -129,8 +172,8 @@ const getNodeTooltip = (issue: IssueInfo): string => {
 const getGraphObjects = (
   issues: { [key: string]: IssueInfo },
   fieldInfo: FieldInfo,
-  useDepthRendering: boolean
-): { nodes: any[]; edges: any[] } => {
+  useDepthRendering: boolean,
+): ElementDefinition[] => {
   const linkInfo = {};
   const linksAndEdges = Object.values(issues).flatMap((issue: IssueInfo) =>
     [
@@ -145,25 +188,22 @@ const getGraphObjects = (
         direction: link.direction,
         type: link.type,
         edge: {
-          from: issue.id,
-          to: link.targetId,
-          label,
-          title: label,
-          arrows: {
-            from: {
-              enabled: link.direction == "OUTWARD" && link.type == "Subtask",
-            },
-            to: {
-              enabled: link.direction !== "BOTH",
-            },
+          data: {
+            id: `${issue.id}-${link.targetId}-${link.type}`,
+            source: issue.id,
+            target: link.targetId,
+            label,
+            title: label,
+            arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
+            arrowTo: link.direction !== "BOTH",
           },
         },
       };
-    })
+    }),
   );
 
   // Filter out duplicate edges.
-  let edges = [];
+  let edges: ElementDefinition[] = [];
   const unDirectedEdgesAdded: { [key: string]: boolean } = {};
   for (const { direction, type, edge } of linksAndEdges) {
     // Include all directed edges.
@@ -173,7 +213,7 @@ const getGraphObjects = (
     }
 
     // If non-directed, check if already added.
-    const reverseEdgeKey = `${type}-${edge.to}-${edge.from}`;
+    const reverseEdgeKey = `${type}-${edge.data.target}-${edge.data.source}`;
 
     if (reverseEdgeKey in unDirectedEdgesAdded) {
       continue;
@@ -181,52 +221,32 @@ const getGraphObjects = (
 
     // Add and mark as added.
     edges.push(edge);
-    const edgeKey = `${type}-${edge.from}-${edge.to}`;
+    const edgeKey = `${type}-${edge.data.source}-${edge.data.target}`;
     unDirectedEdgesAdded[edgeKey] = true;
   }
 
-  let nodes = Object.values(issues)
+  let nodes: ElementDefinition[] = Object.values(issues)
     // Transform issues to graph nodes.
     .map((issue: IssueInfo) => {
       const colorEntry = getColor(issue.state, fieldInfo?.stateField);
-      const node: { [key: string]: any } = {
-        id: issue.id,
-        label: getNodeLabel(issue),
-        shape: "box",
-        title: getNodeTooltip(issue),
+      const node: ElementDefinition = {
+        data: {
+          id: issue.id,
+          label: getNodeLabel(issue),
+          htmlLabel: getNodeHtmlLabel(issue),
+          title: getNodeTooltip(issue),
+          linksKnown: issue.linksKnown ? true : false,
+          backgroundColor: colorEntry?.bg,
+          fontColor: colorEntry?.fg,
+        },
       };
       if (useDepthRendering) {
-        node.level = issue.depth;
-      }
-      if (colorEntry) {
-        node.font = { color: colorEntry.fg };
-        node.color = {
-          background: colorEntry.bg,
-          highlight: {
-            background: colorEntry.bg, // getSelectedColor(colorEntry).bg,
-          },
-        };
-      }
-      if (!issue.linksKnown) {
-        node.shapeProperties = {
-          borderDashes: [5, 5],
-        };
+        node.data.level = issue.depth;
       }
       return node;
     });
-  /*
-  issues[issueID].links = issues[issueID].links.filter((sourceLink: IssueLink) => {
-    const target = issues[sourceLink.targetId];
-    const targetHasSameLink =
-      -1 !==
-      target.links.findIndex(
-        (targetLink: IssueLink) =>
-          targetLink.targetId === issueID && targetLink.type === sourceLink.type
-      );
-    return !targetHasSameLink;
-  });
-*/
-  return { nodes, edges };
+
+  return [...nodes, ...edges];
 };
 
 const DepGraph: React.FunctionComponent<DepGraphProps> = ({
@@ -242,165 +262,231 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   onOpenNode,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const network = useRef(null);
-  const data = useRef({ nodes: new DataSet(), edges: new DataSet() });
+  const cyRef = useRef<Core | null>(null);
 
   const updateSelectedNodes = (selectedId: string | null, highlightedIds: Array<string> | null) => {
-    if (!network.current || !data.current) {
+    if (!cyRef.current) {
       return;
     }
+
+    const cy = cyRef.current;
+    cy.nodes().unselect();
+
     const selectedIds = [];
-    let selectEdges = false;
     if (highlightedIds !== null) {
       selectedIds.push(...highlightedIds);
     } else if (selectedId != null) {
-      selectEdges = true;
       selectedIds.push(selectedId);
     }
-    const availableSelectedIds = selectedIds.filter((id) => data.current.nodes.get(id) !== null);
+
+    const availableSelectedIds = selectedIds.filter((id) => cy.getElementById(id).length > 0);
     if (availableSelectedIds.length > 0) {
       console.log(`Graph: Selecting issues ${availableSelectedIds.join(", ")}`);
-      // @ts-ignore
-      network.current.selectNodes(availableSelectedIds, selectEdges);
-    } else {
-      // @ts-ignore
-      network.current.selectNodes([]);
+      availableSelectedIds.forEach((id) => cy.getElementById(id).select());
     }
   };
 
+  // Initialize Cytoscape
   useEffect(() => {
-    if (containerRef.current && data.current) {
-      const options = {
-        physics: {
-          stabilization: true,
-          barnesHut: {
-            avoidOverlap: 0.5,
+    if (containerRef.current && !cyRef.current) {
+      const cy = cytoscape({
+        container: containerRef.current,
+        elements: [],
+        style: [
+          {
+            selector: "node",
+            style: {
+              label: "data(label)",
+              "text-wrap": "wrap",
+              "text-valign": "center",
+              "text-halign": "center",
+              "font-size": "12px",
+              "font-family": FONT_FAMILY,
+              "text-opacity": 0, // Hide the regular label, only show HTML label
+              "background-color": (ele: any) => ele.data("backgroundColor") || Color.SecondaryColor,
+              color: (ele: any) => ele.data("fontColor") || Color.TextColor,
+              "border-width": 2,
+              "border-color": Color.SecondaryColor,
+              width: "label",
+              height: "label",
+              padding: "10px",
+              "text-max-width": maxNodeWidth ? `${maxNodeWidth}px` : "200px",
+              shape: "round-rectangle",
+            } as Css.Node,
           },
-          forceAtlas2Based: {
-            avoidOverlap: 0.5,
+          {
+            selector: "node[!linksKnown]",
+            style: {
+              "border-style": "dashed",
+              "border-dash-pattern": [5, 5],
+            } as Css.Node,
           },
-          hierarchicalRepulsion: {
-            avoidOverlap: 1,
+          {
+            selector: "node:selected",
+            style: {
+              "outline-width": 4,
+              "outline-offset": 4,
+              "outline-color": Color.TextColor,
+              "outline-style": "solid",
+              "outline-opacity": 0.8,
+            } as Css.Node,
           },
-          solver: "barnesHut",
-        },
-        autoResize: true,
-        nodes: {
-          shape: "box",
-          labelHighlightBold: false,
-          font: {
-            multi: "html",
-            size: 12,
-            bold: {
-              size: 12,
-              face: FONT_FAMILY,
-            },
-            ital: {
-              size: 12,
-              face: FONT_FAMILY,
-            },
-            boldital: {
-              size: 12,
-              face: FONT_FAMILY,
-            },
-            mono: {
-              size: 12,
-              face: FONT_FAMILY_MONOSPACE,
-            },
-          },
-          chosen: {
-            node: (values: any, id: string, selected: boolean, hovering: boolean) => {
-              if (selected) {
-                values.shadow = true;
-                values.shadowColor = Color.MessageShadowColor;
-                values.borderWidth = 2;
-                values.borderColor = Color.TextColor;
-              }
-            },
-          },
-          color: {
-            border: Color.SecondaryColor,
-          },
-          widthConstraint: {
-            maximum: maxNodeWidth,
-          },
-        },
-        edges: {
-          smooth: true,
-          width: 0.5,
-          font: {
-            align: "middle",
-            size: 10,
-          },
-          color: {
-            color: Color.LinkColor,
-            highlight: Color.LinkHoverColor,
-            hover: Color.LinkColor,
-            opacity: 1,
-          },
-          arrows: {
-            from: {
-              enabled: false,
-              scaleFactor: 0.7,
-              type: "diamond",
-            },
-            to: {
-              enabled: true,
-              scaleFactor: 0.7,
-              type: "arrow",
+          {
+            selector: "edge",
+            style: {
+              width: 0.5,
+              "line-color": Color.LinkColor,
+              "target-arrow-color": Color.LinkColor,
+              "source-arrow-color": Color.LinkColor,
+              "curve-style": "bezier",
+              label: "data(label)",
+              "font-size": "10px",
+              "text-rotation": "autorotate",
+              "text-margin-y": -10,
             },
           },
-        },
-        interaction: {
-          navigationButtons: true,
-        },
-        layout: {
-          improvedLayout: true,
-          hierarchical: {
-            enabled: useHierarchicalLayout,
-            direction: "UD",
-            sortMethod: "hubsize",
+          {
+            selector: "edge[?arrowTo]",
+            style: {
+              "target-arrow-shape": "triangle",
+            },
           },
-        },
-      };
+          {
+            selector: "edge[?arrowFrom]",
+            style: {
+              "source-arrow-shape": "diamond",
+            },
+          },
+          {
+            selector: "edge:selected",
+            style: {
+              "line-color": Color.LinkHoverColor,
+              "target-arrow-color": Color.LinkHoverColor,
+              "source-arrow-color": Color.LinkHoverColor,
+            },
+          },
+        ],
+        userZoomingEnabled: true,
+        userPanningEnabled: true,
+        boxSelectionEnabled: false,
+      });
 
-      // @ts-ignore
-      let newNetwork = new Network(containerRef.current, data.current, options);
+      // Setup HTML labels
+      (cy as any).nodeHtmlLabel([
+        {
+          query: "node",
+          halign: "center",
+          valign: "center",
+          halignBox: "center",
+          valignBox: "center",
+          tpl: (data: any) => data.htmlLabel,
+        },
+      ]);
 
-      newNetwork.on("selectNode", (params) => {
-        const nodes = params.nodes;
-        if (nodes.length > 0) {
-          console.log(`Selecting node: ${nodes[0]}`);
-          setSelectedNode(nodes[0]);
+      // Add tooltip support
+      cy.on("mouseover", "node", (evt) => {
+        const node = evt.target;
+        const title = node.data("title");
+        if (title && containerRef.current) {
+          containerRef.current.title = title;
         }
       });
-      newNetwork.on("doubleClick", (params) => {
-        const nodes = params.nodes;
-        if (nodes.length > 0) {
-          console.log(`Opening node: ${nodes[0]}`);
-          onOpenNode(nodes[0]);
+
+      cy.on("mouseout", "node", () => {
+        if (containerRef.current) {
+          containerRef.current.title = "";
         }
       });
-      // @ts-ignore
-      network.current = newNetwork;
+
+      cyRef.current = cy;
+    }
+  }, []);
+
+  const getLayoutOptions = (useHierarchicalLayout: boolean) =>
+    useHierarchicalLayout
+      ? {
+          name: "dagre",
+          rankDir: "TB",
+          nodeDimensionsIncludeLabels: true,
+          ranker: "network-simplex",
+          animate: false,
+          fit: true,
+          padding: 30,
+        }
+      : {
+          name: "fcose",
+          animate: false,
+          nodeDimensionsIncludeLabels: true,
+          uniformNodeDimensions: false,
+          idealEdgeLength: 80,
+          fit: true,
+          padding: 30,
+        };
+
+  // Update layout and node width when settings change
+  useEffect(() => {
+    if (cyRef.current) {
+      const cy = cyRef.current;
+
+      // Update max width
+      if (maxNodeWidth) {
+        cy.style().selector("node").style("text-max-width", `${maxNodeWidth}px`).update();
+      }
+
+      // Run layout
+      const layoutOptions = getLayoutOptions(useHierarchicalLayout);
+      const layout = cy.layout(layoutOptions);
+      layout.on("layoutstop", () => {
+        cy.fit(undefined, 30);
+      });
+      layout.run();
     }
   }, [maxNodeWidth, useHierarchicalLayout]);
 
+  // Update event handlers when callbacks change.
   useEffect(() => {
-    if (network.current && data.current) {
+    if (cyRef.current) {
+      const cy = cyRef.current;
+
+      cy.on("onetap", "node", (evt) => {
+        const node = evt.target;
+        console.log(`Selecting node: ${node.id()}`);
+        setSelectedNode(node.id());
+      });
+
+      cy.on("dbltap", "node", (evt) => {
+        const node = evt.target;
+        console.log(`Opening node: ${node.id()}`);
+        onOpenNode(node.id());
+      });
+    }
+  }, [onOpenNode, setSelectedNode]);
+
+  // Update graph data when issues or filters change
+  useEffect(() => {
+    if (cyRef.current) {
+      const cy = cyRef.current;
       const visibleIssues = filterIssues(filterState, issues);
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
-      const { nodes, edges } = getGraphObjects(visibleIssues, fieldInfo, useDepthRendering);
-      data.current.nodes.clear();
-      data.current.nodes.add(nodes);
-      data.current.edges.clear();
-      data.current.edges.add(edges);
-      // @ts-ignore
-      network.current.setData(data.current);
+      const elements = getGraphObjects(visibleIssues, fieldInfo, useDepthRendering);
+
+      // Replace all elements
+      cy.elements().remove();
+      cy.add(elements);
+
+      // Run layout
+      const layoutOptions = getLayoutOptions(useHierarchicalLayout);
+      const layout = cy.layout(layoutOptions);
+      layout.on("layoutstop", () => {
+        cy.fit(undefined, 30);
+      });
+      layout.run();
+
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
   }, [issues, fieldInfo, filterState, useDepthRendering]);
 
+  // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {
     updateSelectedNodes(selectedIssueId, highlightedIssueIds);
   }, [selectedIssueId, highlightedIssueIds]);

@@ -281,53 +281,8 @@ div.dep-graph {
   margin-top: calc(var(--ring-unit) / 2);
   margin-bottom: calc(var(--ring-unit) / 2);
   height: var(--graph-height);
-}
-
-/* Style navigation controls to look OK in dark mode as well. */
-div.vis-network {
+  width: 100%;
   background-color: white;
   border-radius: var(--ring-border-radius);
   border: 1px solid var(--ring-borders-color);
-}
-
-div.vis-network div.vis-navigation div.vis-button.vis-up,
-div.vis-network div.vis-navigation div.vis-button.vis-down,
-div.vis-network div.vis-navigation div.vis-button.vis-left,
-div.vis-network div.vis-navigation div.vis-button.vis-right,
-div.vis-network div.vis-navigation div.vis-button.vis-zoomIn,
-div.vis-network div.vis-navigation div.vis-button.vis-zoomOut {
-  background-position: 7px 7px !important;
-}
-div.vis-network div.vis-navigation div.vis-button.vis-zoomExtends {
-  background-position: 9px 9px !important;
-}
-div.vis-network div.vis-navigation div.vis-button {
-  box-shadow: 0 0 3px 3px var(--ring-borders-color) !important;
-}
-
-div.vis-network div.vis-navigation div.vis-button:hover {
-  box-shadow: 0 0 1px 3px var(--ring-border-hover-color) !important;
-}
-
-.vis-button.vis-up {
-  background-image: url('./icons/arrow-20px-up.svg') !important;
-}
-.vis-button.vis-down {
-  background-image: url('./icons/arrow-20px-down.svg') !important;
-}
-.vis-button.vis-left {
-  background-image: url('./icons/arrow-20px-left.svg') !important;
-}
-.vis-button.vis-right {
-  background-image: url('./icons/arrow-20px-right.svg') !important;
-}
-.vis-button.vis-zoomIn {
-  background-image: url('./icons/add-20px.svg') !important;
-}
-.vis-button.vis-zoomOut {
-  background-image: url('./icons/remove-20px.svg') !important;
-}
-.vis-button.vis-zoomExtends {
-  background-position: 10px 10px !important;
-  background-image: url('./icons/fullscreen.svg') !important;
 }
