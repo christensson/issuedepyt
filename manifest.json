@@ -7,8 +7,8 @@
     "name": "Marcus Christensson",
     "url": "https://github.com/christensson/issuedepyt"
   },
-  "version": "1.6.0",
-  "changeNotes": "Version 1.6.0:<br/>- Add full-screen app to youtrack main menu.", 
+  "version": "1.7.0",
+  "changeNotes": "Version 1.7.0:<br/>- Change graph engine to cytoscape.js.<br/>- Fix open ticket on graph node double-click.<br/>- Rework graph UI controls.<br/>- Add support for other directions than top-down for hierarchical tree layouts.<br/>- Add support for minimizing node labels.", 
   "icon": "issuedepyt-icon.svg",
   "minYouTrackVersion": "2024.3.0",
   "widgets": [
