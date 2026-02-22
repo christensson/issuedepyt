@@ -16,10 +16,9 @@ Any custom YouTrack Issue Link Types are also supported.
 
 The loaded graph data can be exported to a CSV file.
 
-Visualization is performed using [vis.js] components [vis-network] and [vis-timeline].
+Visualization is performed using [cytoscape.js] and [vis-timeline].
 
-[vis.js]: https://visjs.org/
-[vis-network]: https://github.com/visjs/vis-network
+[cytoscape.js]: https://js.cytoscape.org/
 [vis-timeline]: https://github.com/visjs/vis-timeline
 
 ![Honored YouTrack App Creator Badge](https://api.accredible.com/v1/frontend/credential_website_embed_image/badge/168044274)
