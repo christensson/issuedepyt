@@ -1,21 +1,19 @@
-import React, { useEffect, useRef, useCallback } from "react";
-import cytoscape, { Core, ElementDefinition, Css, use } from "cytoscape";
+import cytoscape, { Core, Css, ElementDefinition, use } from "cytoscape";
+import React, { useCallback, useEffect, useRef } from "react";
 // @ts-ignore - No TypeScript definitions available
 import dagre from "cytoscape-dagre";
 // @ts-ignore - No TypeScript definitions available
 import fcose from "cytoscape-fcose";
 // @ts-ignore - No TypeScript definitions available
-import nodeHtmlLabel from "cytoscape-node-html-label";
-import type { IssueInfo, IssueLink } from "./issue-types";
 import type { FieldInfo, FieldInfoField } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
+import { Color, ColorPaletteItem, hexToRgb, rgbToHex } from "./colors";
 import { filterIssues } from "./issue-helpers";
-import { ColorPaletteItem, Color, hexToRgb, rgbToHex } from "./colors";
+import type { IssueInfo, IssueLink } from "./issue-types";
 
 // Register Cytoscape extensions
 cytoscape.use(dagre);
 cytoscape.use(fcose);
-nodeHtmlLabel(cytoscape);
 
 interface DepGraphProps {
   issues: { [id: string]: IssueInfo };
@@ -286,7 +284,51 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   };
 
-  // Initialize Cytoscape
+  const calcLabelDimensions = (label: string, node: any): { width: number; height: number } => {
+    if (label.length === 0) {
+      return { width: 20, height: 20 }; // Minimum width for nodes without labels.
+    }
+    // Reference implementation is calculateLabelDimensions.
+    // See https://github.com/cytoscape/cytoscape.js/blob/unstable/src/extensions/renderer/base/coord-ele-math/labels.mjs
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (ctx == null) {
+      return { width: 20, height: 20 }; // Minimum width for nodes without labels.
+    }
+    const fStyle = node.pstyle("font-style").strValue;
+    const fontSize = node.pstyle("font-size").pfValue;
+    const size = fontSize + "px";
+    const family = node.pstyle("font-family").strValue;
+    const weight = node.pstyle("font-weight").strValue;
+    const textMaxWidth = node.pstyle("text-max-width").pfValue;
+
+    ctx.font = fStyle + " " + weight + " " + size + " " + family;
+    const lines = label.split("\n");
+    const longestLine = lines.reduce(
+      (longest: string, line: string) => (line.length > longest.length ? line : longest),
+      "",
+    );
+    const maxWidth = Math.ceil(ctx.measureText(longestLine).width);
+    const width = Math.min(maxWidth, textMaxWidth || maxWidth);
+    const realLines =
+      lines.length +
+      (textMaxWidth && maxWidth > textMaxWidth ? Math.ceil(maxWidth / textMaxWidth) - 1 : 0);
+    const height = realLines * fontSize * 1.05;
+    return { width, height };
+  };
+
+  const calcNodeWidth = (node: any) => {
+    const label = node.data("label") || "";
+    const dimensions = calcLabelDimensions(label, node);
+    return dimensions.width;
+  };
+
+  const calcNodeHeight = (node: any) => {
+    const label = node.data("label") || "";
+    const dimensions = calcLabelDimensions(label, node);
+    return dimensions.height;
+  };
+
+  // Initialize Cytoscape.
   useEffect(() => {
     if (containerRef.current && !cyRef.current) {
       const cy = cytoscape({
@@ -302,14 +344,14 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               "text-halign": "center",
               "font-size": "12px",
               "font-family": FONT_FAMILY,
-              "text-opacity": 0, // Hide the regular label, only show HTML label
+              "text-opacity": 1, // Hide the regular label, only show HTML label
               "background-color": (ele: any) => ele.data("backgroundColor") || Color.SecondaryColor,
               color: (ele: any) => ele.data("fontColor") || Color.TextColor,
               "border-width": 2,
               "border-color": Color.SecondaryColor,
-              width: "label",
-              height: "label",
               padding: "10px",
+              width: calcNodeWidth,
+              height: calcNodeHeight,
               "text-max-width": maxNodeWidth ? `${maxNodeWidth}px` : "200px",
               shape: "round-rectangle",
             } as Css.Node,
@@ -371,18 +413,6 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         boxSelectionEnabled: false,
       });
 
-      // Setup HTML labels
-      (cy as any).nodeHtmlLabel([
-        {
-          query: "node",
-          halign: "center",
-          valign: "center",
-          halignBox: "center",
-          valignBox: "center",
-          tpl: (data: any) => data.htmlLabel,
-        },
-      ]);
-
       // Add tooltip support
       cy.on("mouseover", "node", (evt) => {
         const node = evt.target;
@@ -428,12 +458,19 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     if (cyRef.current) {
       const cy = cyRef.current;
 
-      // Update max width
+      // Update max width.
       if (maxNodeWidth) {
-        cy.style().selector("node").style("text-max-width", `${maxNodeWidth}px`).update();
+        cy.style()
+          .selector("node")
+          .style({
+            "text-max-width": `${maxNodeWidth}px`,
+            width: calcNodeWidth,
+            height: calcNodeHeight,
+          })
+          .update();
       }
 
-      // Run layout
+      // Run layout.
       const layoutOptions = getLayoutOptions(useHierarchicalLayout);
       const layout = cy.layout(layoutOptions);
       layout.on("layoutstop", () => {
@@ -462,7 +499,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   }, [onOpenNode, setSelectedNode]);
 
-  // Update graph data when issues or filters change
+  // Update graph data when issues or filters change.
   useEffect(() => {
     if (cyRef.current) {
       const cy = cyRef.current;
@@ -470,7 +507,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
       const elements = getGraphObjects(visibleIssues, fieldInfo, useDepthRendering);
 
-      // Replace all elements
+      // Replace all elements.
       cy.elements().remove();
       cy.add(elements);
 
