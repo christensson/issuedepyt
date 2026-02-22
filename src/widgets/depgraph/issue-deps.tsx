@@ -1,34 +1,33 @@
-import React, { useState, useEffect, useCallback } from "react";
-import Button from "@jetbrains/ring-ui-built/components/button/button";
-import Icon from "@jetbrains/ring-ui-built/components/icon/icon";
-import Group from "@jetbrains/ring-ui-built/components/group/group";
-import Checkbox from "@jetbrains/ring-ui-built/components/checkbox/checkbox";
-import Text from "@jetbrains/ring-ui-built/components/text/text";
-import Toggle from "@jetbrains/ring-ui-built/components/toggle/toggle";
-import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
-import Theme from "@jetbrains/ring-ui-built/components/global/theme";
-import { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
-import LoaderInline from "@jetbrains/ring-ui-built/components/loader-inline/loader-inline";
+import DownloadIcon from "@jetbrains/icons/download";
 import ExpandAllIcon from "@jetbrains/icons/expand-all";
 import InfoIcon from "@jetbrains/icons/info";
 import UpdateIcon from "@jetbrains/icons/update";
-import DownloadIcon from "@jetbrains/icons/download";
-import { host } from "../global/ytApp";
-import type { Settings } from "../../../@types/settings";
+import Button from "@jetbrains/ring-ui-built/components/button/button";
+import Checkbox from "@jetbrains/ring-ui-built/components/checkbox/checkbox";
+import Theme from "@jetbrains/ring-ui-built/components/global/theme";
+import Group from "@jetbrains/ring-ui-built/components/group/group";
+import Icon from "@jetbrains/ring-ui-built/components/icon/icon";
+import LoaderInline from "@jetbrains/ring-ui-built/components/loader-inline/loader-inline";
+import Text from "@jetbrains/ring-ui-built/components/text/text";
+import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
+import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
+import React, { useCallback, useEffect, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
-import { fetchDeps, fetchDepsAndExtend, fetchIssueAndInfo } from "./fetch-deps";
-import type { FollowDirection, FollowDirections } from "./fetch-deps";
-import type { IssueInfo, IssueLink, Relation, Relations, DirectionType } from "./issue-types";
-import exportData from "./export";
+import type { FilterState } from "../../../@types/filter-state";
+import type { Settings } from "../../../@types/settings";
+import { host } from "../global/ytApp";
+import { openGraphPage } from "../issuedepyt-page/open-page";
 import DepGraph from "./dep-graph";
 import DepTimeline from "./dep-timeline";
-import IssueInfoCard from "./issue-info-card";
-import OptionsDropdownMenu from "./options-dropdown-menu";
+import exportData from "./export";
+import type { FollowDirection, FollowDirections } from "./fetch-deps";
+import { fetchDeps, fetchDepsAndExtend, fetchIssueAndInfo } from "./fetch-deps";
 import FilterDropdownMenu, { createFilterState } from "./filter-dropdown-menu";
+import IssueInfoCard from "./issue-info-card";
+import type { DirectionType, IssueInfo, IssueLink, Relation, Relations } from "./issue-types";
+import OptionsDropdownMenu from "./options-dropdown-menu";
 import SearchDropdownMenu from "./search-dropdown-menu";
-import type { FilterState } from "../../../@types/filter-state";
 import VerticalSizeControl from "./vertical-size-control";
-import { openGraphPage } from "../issuedepyt-page/open-page";
 
 interface IssueDepsProps {
   issueId: string;
@@ -162,14 +161,10 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
   };
 
-  const refreshData = useCallback(async () => {
-    setLoading(true);
-    console.log(`Fetching deps for ${issueId}...`);
-    const { issue: issueInfo, fieldInfo: fieldInfoData } = await fetchIssueAndInfo(
-      host,
-      issueId,
-      settings,
-    );
+  const getFollowDirections = (
+    followUpstream: boolean,
+    followDownstream: boolean,
+  ): FollowDirections => {
     const followDirs: FollowDirections = [];
     if (followUpstream) {
       followDirs.push("upstream");
@@ -177,6 +172,26 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     if (followDownstream) {
       followDirs.push("downstream");
     }
+    return followDirs;
+  };
+
+  const refreshData = useCallback(async () => {
+    const followDirs: FollowDirections = getFollowDirections(followUpstream, followDownstream);
+    if (
+      followDirs.length === 0 ||
+      (relations.upstream.length === 0 && relations.downstream.length === 0)
+    ) {
+      console.log(`Not fetching deps for root ${issueId}, no directions or relations yet...`);
+      return;
+    }
+    setLoading(true);
+    console.log(`Fetching deps for root ${issueId}...`);
+
+    const { issue: issueInfo, fieldInfo: fieldInfoData } = await fetchIssueAndInfo(
+      host,
+      issueId,
+      settings,
+    );
     const issues = await fetchDeps(host, issueInfo, maxDepth, relations, followDirs, settings);
     setFilterState(createFilterState(fieldInfoData));
     setFieldInfo(fieldInfoData);
@@ -184,7 +199,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       const height = calcGraphSizeFromIssues(issues);
       activateGraphHeight(height);
     }
-    console.log("Fetched issues (refresh):", issues);
+    console.log("Fetched issues from root:", issues);
     setIssueData(issues);
     // Remove highlight.
     setHighlightedNodes(null);
@@ -207,13 +222,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     async (issueId: string, direction: FollowDirection | null = null) => {
       console.log(`Fetching deps for ${issueId}...`);
       setLoading(true);
-      const followDirs: FollowDirections = [];
-      if (direction === "upstream" || followUpstream) {
-        followDirs.push("upstream");
-      }
-      if (direction === "downstream" || followDownstream) {
-        followDirs.push("downstream");
-      }
+      const followDirs: FollowDirections = getFollowDirections(followUpstream, followDownstream);
       const issues = await fetchDepsAndExtend(
         host,
         issueId,
