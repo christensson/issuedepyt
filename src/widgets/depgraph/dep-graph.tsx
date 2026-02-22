@@ -77,8 +77,9 @@ const getSelectedColor = (colorEntry: ColorPaletteItem): ColorPaletteItem => {
 
 const getNodeLabel = (issue: IssueInfo, options: NodeLabelOptions): string => {
   let lines = [];
+  let thinSpace = "\u2006";
   if (options.showType && issue?.type) {
-    lines.push(`<< ${issue.type} >>`);
+    lines.push(`≪${thinSpace}${issue.type}${thinSpace}≫`);
   }
 
   let summary = "" + issue.idReadable;
@@ -99,7 +100,10 @@ const getNodeLabel = (issue: IssueInfo, options: NodeLabelOptions): string => {
       flags.push(issue.sprints.length > 0 ? "Planned" : "Unplanned");
     }
     if (flags.length > 0) {
-      lines.push("[ " + flags.join(" | ") + " ]");
+      const flagsHeader = `[${thinSpace}`;
+      const flagsTrailer = `${thinSpace}]`;
+      const flagsDelimiter = `${thinSpace}⋮${thinSpace}`; // "￨"; // " ‧ "; // " • ";
+      lines.push(`${flagsHeader}${flags.join(flagsDelimiter)}${flagsTrailer}`);
     }
   }
   return lines.join("\n");
