@@ -15,6 +15,12 @@ import type { IssueInfo, IssueLink } from "./issue-types";
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 
+export type NodeLabelOptions = {
+  showSummary: boolean;
+  showFlags: boolean;
+  showType: boolean;
+};
+
 interface DepGraphProps {
   issues: { [id: string]: IssueInfo };
   selectedIssueId: string | null;
@@ -23,6 +29,7 @@ interface DepGraphProps {
   filterState: FilterState;
   maxNodeWidth: number | undefined;
   useHierarchicalLayout: boolean;
+  nodeLabelOptions: NodeLabelOptions;
   useDepthRendering: boolean;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
@@ -68,32 +75,33 @@ const getSelectedColor = (colorEntry: ColorPaletteItem): ColorPaletteItem => {
   };
 };
 
-const getNodeLabel = (issue: IssueInfo): string => {
+const getNodeLabel = (issue: IssueInfo, options: NodeLabelOptions): string => {
   let lines = [];
-  if (issue?.type) {
+  if (options.showType && issue?.type) {
     lines.push(`<< ${issue.type} >>`);
   }
 
   let summary = "" + issue.idReadable;
-  if (issue?.summary) {
+  if (options.showSummary && issue?.summary) {
     summary = `${summary}: ${issue.summary}`;
   }
   lines.push(summary);
 
-  let flags = [];
-  if (issue?.state) {
-    flags.push(issue.state);
+  if (options.showFlags) {
+    let flags = [];
+    if (issue?.state) {
+      flags.push(issue.state);
+    }
+    if (issue.hasOwnProperty("assignee")) {
+      flags.push(issue?.assignee ? "Assigned" : "Unassigned");
+    }
+    if (issue?.sprints) {
+      flags.push(issue.sprints.length > 0 ? "Planned" : "Unplanned");
+    }
+    if (flags.length > 0) {
+      lines.push("[ " + flags.join(" | ") + " ]");
+    }
   }
-  if (issue.hasOwnProperty("assignee")) {
-    flags.push(issue?.assignee ? "Assigned" : "Unassigned");
-  }
-  if (issue?.sprints) {
-    flags.push(issue.sprints.length > 0 ? "Planned" : "Unplanned");
-  }
-  if (flags.length > 0) {
-    lines.push(flags.join(", "));
-  }
-
   return lines.join("\n");
 };
 
@@ -170,6 +178,7 @@ const getNodeTooltip = (issue: IssueInfo): string => {
 const getGraphObjects = (
   issues: { [key: string]: IssueInfo },
   fieldInfo: FieldInfo,
+  nodeLabelOptions: NodeLabelOptions,
   useDepthRendering: boolean,
 ): ElementDefinition[] => {
   const linkInfo = {};
@@ -233,8 +242,8 @@ const getGraphObjects = (
       const node: ElementDefinition = {
         data: {
           id: issue.id,
-          label: getNodeLabel(issue),
-          htmlLabel: getNodeHtmlLabel(issue),
+          label: getNodeLabel(issue, nodeLabelOptions),
+          // htmlLabel: getNodeHtmlLabel(issue),
           title: getNodeTooltip(issue),
           linksKnown: issue.linksKnown ? true : false,
           backgroundColor: colorEntry?.bg,
@@ -258,6 +267,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   filterState,
   maxNodeWidth,
   useHierarchicalLayout,
+  nodeLabelOptions,
   useDepthRendering,
   setSelectedNode,
   onOpenNode,
@@ -508,7 +518,12 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cy = cyRef.current;
       const visibleIssues = filterIssues(filterState, issues);
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
-      const elements = getGraphObjects(visibleIssues, fieldInfo, useDepthRendering);
+      const elements = getGraphObjects(
+        visibleIssues,
+        fieldInfo,
+        nodeLabelOptions,
+        useDepthRendering,
+      );
 
       // Replace all elements.
       cy.elements().remove();
@@ -524,7 +539,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, useDepthRendering]);
+  }, [issues, fieldInfo, filterState, nodeLabelOptions, useDepthRendering]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {

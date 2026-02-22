@@ -1,12 +1,12 @@
-import React, { useRef, useState } from "react";
-import DropdownMenu from "@jetbrains/ring-ui-built/components/dropdown-menu/dropdown-menu";
-import Input from "@jetbrains/ring-ui-built/components/input/input";
+import CloseIcon from "@jetbrains/icons/close";
+import MoreOptionsIcon from "@jetbrains/icons/more-options";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
 import Checkbox from "@jetbrains/ring-ui-built/components/checkbox/checkbox";
-import MoreOptionsIcon from "@jetbrains/icons/more-options";
-import CloseIcon from "@jetbrains/icons/close";
-import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
+import DropdownMenu from "@jetbrains/ring-ui-built/components/dropdown-menu/dropdown-menu";
 import Theme from "@jetbrains/ring-ui-built/components/global/theme";
+import Input from "@jetbrains/ring-ui-built/components/input/input";
+import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
+import React, { useRef, useState } from "react";
 
 interface OptionsDropdownMenuProps {
   maxDepth: number;
@@ -15,12 +15,18 @@ interface OptionsDropdownMenuProps {
   useDepthRendering: boolean;
   followUpstream: boolean;
   followDownstream: boolean;
+  showNodeLabelFlags: boolean;
+  showNodeLabelSummary: boolean;
+  showNodeLabelType: boolean;
   setMaxDepth: (value: number) => void;
   setMaxNodeWidth: (value: number) => void;
   setUseHierarchicalLayout: (value: boolean) => void;
   setUseDepthRendering: (value: boolean) => void;
   setFollowUpstream: (value: boolean) => void;
   setFollowDownstream: (value: boolean) => void;
+  setShowNodeLabelFlags: (show: boolean) => void;
+  setShowNodeLabelSummary: (show: boolean) => void;
+  setShowNodeLabelType: (show: boolean) => void;
   onExportData: () => void;
 }
 
@@ -31,12 +37,18 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
   useDepthRendering,
   followUpstream,
   followDownstream,
+  showNodeLabelFlags,
+  showNodeLabelSummary,
+  showNodeLabelType,
   setMaxDepth,
   setMaxNodeWidth,
   setUseHierarchicalLayout,
   setUseDepthRendering,
   setFollowUpstream,
   setFollowDownstream,
+  setShowNodeLabelFlags,
+  setShowNodeLabelSummary,
+  setShowNodeLabelType,
   onExportData,
 }) => {
   const [open, setOpen] = useState<boolean>(false);
@@ -84,6 +96,40 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
               label="Max depth"
               value={maxDepth}
               onChange={(e: any) => setMaxDepth(Number(e.target.value))}
+            />
+          ),
+        },
+        {
+          rgItemType: DropdownMenu.ListProps.Type.TITLE,
+          label: "Nodes",
+        },
+        {
+          rgItemType: DropdownMenu.ListProps.Type.CUSTOM,
+          template: (
+            <Checkbox
+              label="Show ticket flags"
+              checked={showNodeLabelFlags}
+              onChange={(e: any) => setShowNodeLabelFlags(e.target.checked)}
+            />
+          ),
+        },
+        {
+          rgItemType: DropdownMenu.ListProps.Type.CUSTOM,
+          template: (
+            <Checkbox
+              label="Show ticket summary"
+              checked={showNodeLabelSummary}
+              onChange={(e: any) => setShowNodeLabelSummary(e.target.checked)}
+            />
+          ),
+        },
+        {
+          rgItemType: DropdownMenu.ListProps.Type.CUSTOM,
+          template: (
+            <Checkbox
+              label="Show ticket type"
+              checked={showNodeLabelType}
+              onChange={(e: any) => setShowNodeLabelType(e.target.checked)}
             />
           ),
         },

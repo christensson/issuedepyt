@@ -17,7 +17,7 @@ import type { FilterState } from "../../../@types/filter-state";
 import type { Settings } from "../../../@types/settings";
 import { host } from "../global/ytApp";
 import { openGraphPage } from "../issuedepyt-page/open-page";
-import DepGraph from "./dep-graph";
+import DepGraph, { type NodeLabelOptions } from "./dep-graph";
 import DepTimeline from "./dep-timeline";
 import exportData from "./export";
 import type { FollowDirection, FollowDirections } from "./fetch-deps";
@@ -142,6 +142,11 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   const [useHierarchicalLayout, setUseHierarchicalLayout] = useState<boolean>(
     DEFAULT_USE_HIERARCHICAL_LAYOUT,
   );
+  const [nodeLabelOptions, setNodeLabelOptions] = useState<NodeLabelOptions>({
+    showSummary: true,
+    showFlags: true,
+    showType: true,
+  });
   const [useDepthRendering, setUseDepthRendering] = useState<boolean>(DEFAULT_USE_DEPTH_RENDERING);
   const [fieldInfo, setFieldInfo] = useState<FieldInfo>({});
   const [issueData, setIssueData] = useState<{ [key: string]: IssueInfo }>({});
@@ -400,12 +405,24 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               useDepthRendering={useDepthRendering}
               followUpstream={followUpstream}
               followDownstream={followDownstream}
+              showNodeLabelFlags={nodeLabelOptions.showFlags}
+              showNodeLabelSummary={nodeLabelOptions.showSummary}
+              showNodeLabelType={nodeLabelOptions.showType}
               setMaxDepth={setMaxDepth}
               setMaxNodeWidth={setMaxNodeWidth}
               setUseHierarchicalLayout={setUseHierarchicalLayout}
               setUseDepthRendering={setUseDepthRendering}
               setFollowUpstream={setFollowUpstream}
               setFollowDownstream={setFollowDownstream}
+              setShowNodeLabelFlags={(show: boolean) =>
+                setNodeLabelOptions((prev) => ({ ...prev, showFlags: show }))
+              }
+              setShowNodeLabelSummary={(show: boolean) =>
+                setNodeLabelOptions((prev) => ({ ...prev, showSummary: show }))
+              }
+              setShowNodeLabelType={(show: boolean) =>
+                setNodeLabelOptions((prev) => ({ ...prev, showType: show }))
+              }
               onExportData={() => exportData(issueId, issueData)}
             />
           </Group>
@@ -431,6 +448,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           filterState={filterState}
           maxNodeWidth={maxNodeWidth}
           useHierarchicalLayout={useHierarchicalLayout}
+          nodeLabelOptions={nodeLabelOptions}
           useDepthRendering={useDepthRendering}
           setSelectedNode={selectNode}
           onOpenNode={openNode}
