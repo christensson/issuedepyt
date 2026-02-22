@@ -12,7 +12,7 @@ interface OptionsDropdownMenuProps {
   maxDepth: number;
   maxNodeWidth: number | undefined;
   useHierarchicalLayout: boolean;
-  useDepthRendering: boolean;
+  useAlternateTreeLayout: boolean;
   followUpstream: boolean;
   followDownstream: boolean;
   showNodeLabelFlags: boolean;
@@ -21,7 +21,7 @@ interface OptionsDropdownMenuProps {
   setMaxDepth: (value: number) => void;
   setMaxNodeWidth: (value: number) => void;
   setUseHierarchicalLayout: (value: boolean) => void;
-  setUseDepthRendering: (value: boolean) => void;
+  setUseAlternateTreeLayout: (value: boolean) => void;
   setFollowUpstream: (value: boolean) => void;
   setFollowDownstream: (value: boolean) => void;
   setShowNodeLabelFlags: (show: boolean) => void;
@@ -34,7 +34,7 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
   maxDepth,
   maxNodeWidth,
   useHierarchicalLayout,
-  useDepthRendering,
+  useAlternateTreeLayout,
   followUpstream,
   followDownstream,
   showNodeLabelFlags,
@@ -43,7 +43,7 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
   setMaxDepth,
   setMaxNodeWidth,
   setUseHierarchicalLayout,
-  setUseDepthRendering,
+  setUseAlternateTreeLayout,
   setFollowUpstream,
   setFollowDownstream,
   setShowNodeLabelFlags,
@@ -82,9 +82,9 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
           rgItemType: DropdownMenu.ListProps.Type.CUSTOM,
           template: (
             <Checkbox
-              label="Strict depth layout"
-              checked={useDepthRendering}
-              onChange={(e: any) => setUseDepthRendering(e.target.checked)}
+              label="Use alternate tree layout"
+              checked={useAlternateTreeLayout}
+              onChange={(e: any) => setUseAlternateTreeLayout(e.target.checked)}
             />
           ),
         },

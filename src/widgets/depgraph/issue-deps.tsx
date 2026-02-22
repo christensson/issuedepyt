@@ -8,6 +8,8 @@ import Theme from "@jetbrains/ring-ui-built/components/global/theme";
 import Group from "@jetbrains/ring-ui-built/components/group/group";
 import Icon from "@jetbrains/ring-ui-built/components/icon/icon";
 import LoaderInline from "@jetbrains/ring-ui-built/components/loader-inline/loader-inline";
+import type { SelectItem } from "@jetbrains/ring-ui-built/components/select/select";
+import Select from "@jetbrains/ring-ui-built/components/select/select";
 import Text from "@jetbrains/ring-ui-built/components/text/text";
 import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
 import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
@@ -17,7 +19,11 @@ import type { FilterState } from "../../../@types/filter-state";
 import type { Settings } from "../../../@types/settings";
 import { host } from "../global/ytApp";
 import { openGraphPage } from "../issuedepyt-page/open-page";
-import DepGraph, { type NodeLabelOptions } from "./dep-graph";
+import DepGraph, {
+  type HierarchicalDirection,
+  type LayoutOptions,
+  type NodeLabelOptions,
+} from "./dep-graph";
 import DepTimeline from "./dep-timeline";
 import exportData from "./export";
 import type { FollowDirection, FollowDirections } from "./fetch-deps";
@@ -43,7 +49,7 @@ interface IssueDepsProps {
 const DEFAULT_MAX_DEPTH = 6;
 const DEFAULT_MAX_NODE_WIDTH = 200;
 const DEFAULT_USE_HIERARCHICAL_LAYOUT = false;
-const DEFAULT_USE_DEPTH_RENDERING = true;
+const DEFAULT_USE_ALTERNATE_TREE_LAYOUT = false;
 
 type GRAPH_SIZE_ITEM = {
   height: number;
@@ -139,15 +145,16 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   const [highlightedNodes, setHighlightedNodes] = useState<Array<string> | null>(null);
   const [maxNodeWidth, setMaxNodeWidth] = useState<number>(DEFAULT_MAX_NODE_WIDTH);
   const [maxDepth, setMaxDepth] = useState<number>(DEFAULT_MAX_DEPTH);
-  const [useHierarchicalLayout, setUseHierarchicalLayout] = useState<boolean>(
-    DEFAULT_USE_HIERARCHICAL_LAYOUT,
-  );
   const [nodeLabelOptions, setNodeLabelOptions] = useState<NodeLabelOptions>({
     showSummary: true,
     showFlags: true,
     showType: true,
   });
-  const [useDepthRendering, setUseDepthRendering] = useState<boolean>(DEFAULT_USE_DEPTH_RENDERING);
+  const [layoutOptions, setLayoutOptions] = useState<LayoutOptions>({
+    hierarchical: DEFAULT_USE_HIERARCHICAL_LAYOUT,
+    hierarchicalDirection: "TB",
+    alternateTreeLayout: DEFAULT_USE_ALTERNATE_TREE_LAYOUT,
+  });
   const [fieldInfo, setFieldInfo] = useState<FieldInfo>({});
   const [issueData, setIssueData] = useState<{ [key: string]: IssueInfo }>({});
   const [filterState, setFilterState] = useState<FilterState>({
@@ -274,13 +281,35 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     }
 
     if (settings?.useHierarchicalLayout != undefined) {
-      setUseHierarchicalLayout(settings.useHierarchicalLayout);
+      setLayoutOptions((prev) => ({
+        ...prev,
+        hierarchical: settings.useHierarchicalLayout || false,
+      }));
     }
   }, [settings]);
 
   useEffect(() => {
     refreshData();
   }, [host, issueId, maxDepth, relations]);
+
+  const treeDirectionSelectItems: Array<SelectItem<{ key: HierarchicalDirection }>> = [
+    {
+      key: "TB",
+      label: "Top down direction",
+    },
+    {
+      key: "BT",
+      label: "Bottom up direction",
+    },
+    {
+      key: "LR",
+      label: "Left to right direction",
+    },
+    {
+      key: "RL",
+      label: "Right to left direction",
+    },
+  ];
 
   return (
     <div>
@@ -401,8 +430,8 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
             <OptionsDropdownMenu
               maxDepth={maxDepth}
               maxNodeWidth={maxNodeWidth}
-              useHierarchicalLayout={useHierarchicalLayout}
-              useDepthRendering={useDepthRendering}
+              useHierarchicalLayout={layoutOptions.hierarchical}
+              useAlternateTreeLayout={layoutOptions.alternateTreeLayout}
               followUpstream={followUpstream}
               followDownstream={followDownstream}
               showNodeLabelFlags={nodeLabelOptions.showFlags}
@@ -410,8 +439,12 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               showNodeLabelType={nodeLabelOptions.showType}
               setMaxDepth={setMaxDepth}
               setMaxNodeWidth={setMaxNodeWidth}
-              setUseHierarchicalLayout={setUseHierarchicalLayout}
-              setUseDepthRendering={setUseDepthRendering}
+              setUseHierarchicalLayout={(hierarchical: boolean) =>
+                setLayoutOptions((prev) => ({ ...prev, hierarchical }))
+              }
+              setUseAlternateTreeLayout={(alternateTreeLayout: boolean) =>
+                setLayoutOptions((prev) => ({ ...prev, alternateTreeLayout }))
+              }
               setFollowUpstream={setFollowUpstream}
               setFollowDownstream={setFollowDownstream}
               setShowNodeLabelFlags={(show: boolean) =>
@@ -447,12 +480,92 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           fieldInfo={fieldInfo}
           filterState={filterState}
           maxNodeWidth={maxNodeWidth}
-          useHierarchicalLayout={useHierarchicalLayout}
           nodeLabelOptions={nodeLabelOptions}
-          useDepthRendering={useDepthRendering}
+          layoutOptions={layoutOptions}
           setSelectedNode={selectNode}
           onOpenNode={openNode}
-        />
+        >
+          <div className={"dep-graph-node-controls"}>
+            <Toggle
+              size={ToggleSize.Size14}
+              checked={layoutOptions.hierarchical}
+              onChange={(e: any) =>
+                setLayoutOptions((prev) => ({ ...prev, hierarchical: e.target.checked }))
+              }
+            >
+              Tree layout
+            </Toggle>
+            {layoutOptions.hierarchical && (
+              <Toggle
+                size={ToggleSize.Size14}
+                checked={layoutOptions.alternateTreeLayout}
+                onChange={(e: any) =>
+                  setLayoutOptions((prev) => ({ ...prev, alternateTreeLayout: e.target.checked }))
+                }
+              >
+                Alternate tree layout
+              </Toggle>
+            )}
+            {layoutOptions.hierarchical && (
+              <Select
+                data={treeDirectionSelectItems}
+                selected={treeDirectionSelectItems.find(
+                  (item) => item.key === layoutOptions.hierarchicalDirection,
+                )}
+                onSelect={(selected: SelectItem<{ key: HierarchicalDirection }> | null) => {
+                  if (!selected) return;
+                  setLayoutOptions((prev) => ({ ...prev, hierarchicalDirection: selected.key }));
+                }}
+                type={Select.Type.INLINE}
+              />
+            )}
+            <Toggle
+              size={ToggleSize.Size14}
+              checked={
+                !nodeLabelOptions.showType &&
+                !nodeLabelOptions.showSummary &&
+                !nodeLabelOptions.showFlags
+              }
+              onChange={(e: any) =>
+                setNodeLabelOptions((prev) => ({
+                  ...prev,
+                  showType: !e.target.checked,
+                  showSummary: !e.target.checked,
+                  showFlags: !e.target.checked,
+                }))
+              }
+            >
+              Only ticket ID
+            </Toggle>
+            <Toggle
+              size={ToggleSize.Size14}
+              checked={nodeLabelOptions.showType}
+              onChange={(e: any) =>
+                setNodeLabelOptions((prev) => ({ ...prev, showType: e.target.checked }))
+              }
+            >
+              Ticket types
+            </Toggle>
+            <Toggle
+              size={ToggleSize.Size14}
+              checked={nodeLabelOptions.showSummary}
+              onChange={(e: any) =>
+                setNodeLabelOptions((prev) => ({ ...prev, showSummary: e.target.checked }))
+              }
+            >
+              Ticket summary
+            </Toggle>
+            <Toggle
+              size={ToggleSize.Size14}
+              checked={nodeLabelOptions.showFlags}
+              onChange={(e: any) =>
+                setNodeLabelOptions((prev) => ({ ...prev, showFlags: e.target.checked }))
+              }
+            >
+              Ticket attributes
+            </Toggle>
+          </div>
+        </DepGraph>
       )}
       {selectedNode !== null && isSelectedNodeAnIssue(selectedNode, issueData) && (
         <IssueInfoCard issue={issueData[selectedNode]} />

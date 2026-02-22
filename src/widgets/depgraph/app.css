@@ -277,7 +277,8 @@ div.dep-timeline-controls {
   z-index: 9999;
 }
 
-div.dep-graph {
+div.dep-graph-container {
+  position: relative;
   margin-top: calc(var(--ring-unit) / 2);
   margin-bottom: calc(var(--ring-unit) / 2);
   height: var(--graph-height);
@@ -285,4 +286,39 @@ div.dep-graph {
   background-color: white;
   border-radius: var(--ring-border-radius);
   border: 1px solid var(--ring-borders-color);
+  z-index: 0;
+}
+
+div.dep-graph {
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+div.dep-graph-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: var(--ring-unit);
+  padding: calc(var(--ring-unit) / 2);
+  z-index: 2;
+  background-color: white;
+  border-radius: var(--ring-border-radius);
+  border: 1px solid var(--ring-borders-color);
+  gap: calc(var(--ring-unit) / 2);
+}
+
+div.dep-graph-node-controls {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  margin: var(--ring-unit);
+  padding: calc(var(--ring-unit) / 2);
+  z-index: 2;
+  background-color: white;
+  border-radius: var(--ring-border-radius);
+  border: 1px solid var(--ring-borders-color);
+  gap: calc(var(--ring-unit) / 2);
+  display: flex;
+  flex-direction: column;
 }

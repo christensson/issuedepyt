@@ -1,7 +1,17 @@
-import cytoscape, { Core, Css, ElementDefinition, use } from "cytoscape";
+import ZoomOutIcon from "@jetbrains/icons/collapse";
+import ZoomInIcon from "@jetbrains/icons/expand";
+import FullscreenIcon from "@jetbrains/icons/fullscreen";
+import LocateIcon from "@jetbrains/icons/locate";
+import Button from "@jetbrains/ring-ui-built/components/button/button";
+import Theme from "@jetbrains/ring-ui-built/components/global/theme";
+import Group from "@jetbrains/ring-ui-built/components/group/group";
+import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
+import cytoscape, { Core, Css, ElementDefinition, ZoomOptions } from "cytoscape";
 import React, { useCallback, useEffect, useRef } from "react";
 // @ts-ignore - No TypeScript definitions available
 import dagre from "cytoscape-dagre";
+// @ts-ignore - No TypeScript definitions available
+import klay from "cytoscape-klay";
 // @ts-ignore - No TypeScript definitions available
 import fcose from "cytoscape-fcose";
 // @ts-ignore - No TypeScript definitions available
@@ -11,8 +21,11 @@ import { Color, ColorPaletteItem, hexToRgb, rgbToHex } from "./colors";
 import { filterIssues } from "./issue-helpers";
 import type { IssueInfo, IssueLink } from "./issue-types";
 
+const GRAPH_PADDING = 20;
+
 // Register Cytoscape extensions
 cytoscape.use(dagre);
+cytoscape.use(klay);
 cytoscape.use(fcose);
 
 export type NodeLabelOptions = {
@@ -21,16 +34,23 @@ export type NodeLabelOptions = {
   showType: boolean;
 };
 
-interface DepGraphProps {
+export type HierarchicalDirection = "TB" | "LR" | "BT" | "RL";
+
+export type LayoutOptions = {
+  hierarchical: boolean;
+  alternateTreeLayout: boolean;
+  hierarchicalDirection: HierarchicalDirection;
+};
+
+interface DepGraphProps extends React.PropsWithChildren {
   issues: { [id: string]: IssueInfo };
   selectedIssueId: string | null;
   highlightedIssueIds: string[] | null;
   fieldInfo: FieldInfo;
   filterState: FilterState;
   maxNodeWidth: number | undefined;
-  useHierarchicalLayout: boolean;
   nodeLabelOptions: NodeLabelOptions;
-  useDepthRendering: boolean;
+  layoutOptions: LayoutOptions;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
 }
@@ -183,7 +203,6 @@ const getGraphObjects = (
   issues: { [key: string]: IssueInfo },
   fieldInfo: FieldInfo,
   nodeLabelOptions: NodeLabelOptions,
-  useDepthRendering: boolean,
 ): ElementDefinition[] => {
   const linkInfo = {};
   const linksAndEdges = Object.values(issues).flatMap((issue: IssueInfo) =>
@@ -254,9 +273,6 @@ const getGraphObjects = (
           fontColor: colorEntry?.fg,
         },
       };
-      if (useDepthRendering) {
-        node.data.level = issue.depth;
-      }
       return node;
     });
 
@@ -270,11 +286,11 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   fieldInfo,
   filterState,
   maxNodeWidth,
-  useHierarchicalLayout,
   nodeLabelOptions,
-  useDepthRendering,
+  layoutOptions,
   setSelectedNode,
   onOpenNode,
+  children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -303,7 +319,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
 
   const calcLabelDimensions = (label: string, node: any): { width: number; height: number } => {
     if (label.length === 0) {
-      return { width: 20, height: 20 }; // Minimum width for nodes without labels.
+      return { width: 10, height: 10 }; // Minimum width for nodes without labels.
     }
     // Reference implementation is calculateLabelDimensions.
     // See https://github.com/cytoscape/cytoscape.js/blob/unstable/src/extensions/renderer/base/coord-ele-math/labels.mjs
@@ -348,6 +364,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   // Initialize Cytoscape.
   useEffect(() => {
     if (containerRef.current && !cyRef.current) {
+      const shortLabel = !nodeLabelOptions.showSummary && !nodeLabelOptions.showFlags;
       const cy = cytoscape({
         container: containerRef.current,
         elements: [],
@@ -361,12 +378,12 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               "text-halign": "center",
               "font-size": "12px",
               "font-family": FONT_FAMILY,
-              "text-opacity": 1, // Hide the regular label, only show HTML label
+              "text-opacity": 1,
               "background-color": (ele: any) => ele.data("backgroundColor") || Color.SecondaryColor,
               color: (ele: any) => ele.data("fontColor") || Color.TextColor,
               "border-width": 2,
               "border-color": Color.SecondaryColor,
-              padding: "10px",
+              padding: shortLabel ? "5px" : "10px",
               width: calcNodeWidth,
               height: calcNodeHeight,
               "text-max-width": maxNodeWidth ? `${maxNodeWidth}px` : "200px",
@@ -449,53 +466,76 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   }, []);
 
-  const getLayoutOptions = (useHierarchicalLayout: boolean) =>
-    useHierarchicalLayout
-      ? {
-          name: "dagre",
-          rankDir: "TB",
-          nodeDimensionsIncludeLabels: true,
-          ranker: "network-simplex",
-          animate: false,
-          fit: true,
-          padding: 30,
-        }
-      : {
-          name: "fcose",
-          animate: false,
-          nodeDimensionsIncludeLabels: true,
-          uniformNodeDimensions: false,
-          idealEdgeLength: 80,
-          fit: true,
-          padding: 30,
+  const getLayoutOptions = (layoutOptions: LayoutOptions) => {
+    if (layoutOptions.hierarchical) {
+      if (layoutOptions.alternateTreeLayout) {
+        const toDirection = {
+          TB: "DOWN",
+          BT: "UP",
+          LR: "RIGHT",
+          RL: "LEFT",
         };
+        return {
+          name: "klay",
+          klay: {
+            direction: toDirection[layoutOptions.hierarchicalDirection],
+          },
+          nodeDimensionsIncludeLabels: true,
+          animate: false,
+          fit: true,
+          padding: GRAPH_PADDING,
+        };
+      }
+      return {
+        name: "dagre",
+        rankDir: layoutOptions.hierarchicalDirection,
+        nodeDimensionsIncludeLabels: true,
+        ranker: "network-simplex",
+        animate: false,
+        fit: true,
+        padding: GRAPH_PADDING,
+      };
+    }
+    return {
+      name: "fcose",
+      animate: false,
+      nodeDimensionsIncludeLabels: true,
+      uniformNodeDimensions: false,
+      idealEdgeLength: 80,
+      fit: true,
+      padding: GRAPH_PADDING,
+    };
+  };
 
   // Update layout and node width when settings change
   useEffect(() => {
     if (cyRef.current) {
       const cy = cyRef.current;
 
+      const nodeStyle: Css.Node = {};
       // Update max width.
       if (maxNodeWidth) {
-        cy.style()
-          .selector("node")
-          .style({
-            "text-max-width": `${maxNodeWidth}px`,
-            width: calcNodeWidth,
-            height: calcNodeHeight,
-          })
-          .update();
+        Object.assign(nodeStyle, {
+          "text-max-width": `${maxNodeWidth}px`,
+          width: calcNodeWidth,
+          height: calcNodeHeight,
+        });
       }
+      const shortLabel = !nodeLabelOptions.showSummary && !nodeLabelOptions.showFlags;
+      Object.assign(nodeStyle, {
+        padding: shortLabel ? "5px" : "10px",
+      });
+      cy.style().selector("node").style(nodeStyle).update();
 
       // Run layout.
-      const layoutOptions = getLayoutOptions(useHierarchicalLayout);
-      const layout = cy.layout(layoutOptions);
+      const cyLayoutOpts = getLayoutOptions(layoutOptions);
+      const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
-        cy.fit(undefined, 30);
+        cy.fit(undefined, GRAPH_PADDING);
       });
       layout.run();
     }
-  }, [maxNodeWidth, useHierarchicalLayout]);
+  }, [maxNodeWidth, layoutOptions, nodeLabelOptions]);
 
   // Update event handlers when callbacks change.
   useEffect(() => {
@@ -522,35 +562,86 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cy = cyRef.current;
       const visibleIssues = filterIssues(filterState, issues);
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
-      const elements = getGraphObjects(
-        visibleIssues,
-        fieldInfo,
-        nodeLabelOptions,
-        useDepthRendering,
-      );
+      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOptions);
 
       // Replace all elements.
       cy.elements().remove();
       cy.add(elements);
 
       // Run layout
-      const layoutOptions = getLayoutOptions(useHierarchicalLayout);
-      const layout = cy.layout(layoutOptions);
+      const cyLayoutOpts = getLayoutOptions(layoutOptions);
+      const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
-        cy.fit(undefined, 30);
+        cy.fit(undefined, GRAPH_PADDING);
       });
       layout.run();
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, nodeLabelOptions, useDepthRendering]);
+  }, [issues, fieldInfo, filterState, nodeLabelOptions, layoutOptions]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {
     updateSelectedNodes(selectedIssueId, highlightedIssueIds);
   }, [selectedIssueId, highlightedIssueIds]);
 
-  return <div ref={containerRef} className="dep-graph" />;
+  const zoomGraph = useCallback(
+    (factor: number) => {
+      if (cyRef.current) {
+        const cy = cyRef.current;
+        const selectedNode = selectedIssueId ? cy.getElementById(selectedIssueId) : null;
+        const zoomOptions: ZoomOptions = {
+          level: factor * cy.zoom(),
+          position: selectedNode
+            ? selectedNode.position()
+            : { x: cy.width() / 2, y: cy.height() / 2 },
+        };
+        cy.zoom(zoomOptions);
+      }
+    },
+    [selectedIssueId],
+  );
+
+  const focusGraph = useCallback(() => {
+    if (cyRef.current) {
+      const cy = cyRef.current;
+      const selectedNode = selectedIssueId ? cy.getElementById(selectedIssueId) : null;
+      if (selectedNode) {
+        cy.center(selectedNode);
+      } else {
+        cy.center();
+      }
+    }
+  }, [selectedIssueId]);
+  const fitGraph = () => {
+    if (cyRef.current) {
+      const cy = cyRef.current;
+      cy.fit(undefined, GRAPH_PADDING);
+    }
+  };
+
+  return (
+    <div className="dep-graph-container">
+      <div ref={containerRef} className="dep-graph" />
+      {children}
+      <div className="dep-graph-controls">
+        <Group>
+          <Tooltip title={"Zoom in"} theme={Theme.LIGHT}>
+            <Button icon={ZoomInIcon} onClick={() => zoomGraph(1.1)} />
+          </Tooltip>
+          <Tooltip title={"Zoom out"} theme={Theme.LIGHT}>
+            <Button icon={ZoomOutIcon} onClick={() => zoomGraph(0.9)} />
+          </Tooltip>
+          <Tooltip title={"Center selected"} theme={Theme.LIGHT}>
+            <Button icon={LocateIcon} onClick={() => focusGraph()} />
+          </Tooltip>
+          <Tooltip title={"Zoom to fit"} theme={Theme.LIGHT}>
+            <Button icon={FullscreenIcon} onClick={() => fitGraph()} />
+          </Tooltip>
+        </Group>
+      </div>
+    </div>
+  );
 };
 
 export default DepGraph;
