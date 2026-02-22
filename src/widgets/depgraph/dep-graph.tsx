@@ -177,27 +177,30 @@ const getGraphObjects = (
     [
       ...(issue.showUpstream ? issue.upstreamLinks : []),
       ...(issue.showDownstream ? issue.downstreamLinks : []),
-    ].map((link: IssueLink) => {
-      const label =
-        link.direction === "OUTWARD" || link.direction === "BOTH"
-          ? link.sourceToTarget
-          : link.targetToSource;
-      return {
-        direction: link.direction,
-        type: link.type,
-        edge: {
-          data: {
-            id: `${issue.id}-${link.targetId}-${link.type}`,
-            source: issue.id,
-            target: link.targetId,
-            label,
-            title: label,
-            arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
-            arrowTo: link.direction !== "BOTH",
+    ]
+      // Only include links where the target issue exists.
+      .filter((link: IssueLink) => link.targetId in issues)
+      .map((link: IssueLink) => {
+        const label =
+          link.direction === "OUTWARD" || link.direction === "BOTH"
+            ? link.sourceToTarget
+            : link.targetToSource;
+        return {
+          direction: link.direction,
+          type: link.type,
+          edge: {
+            data: {
+              id: `${issue.id}-${link.targetId}-${link.type}`,
+              source: issue.id,
+              target: link.targetId,
+              label,
+              title: label,
+              arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
+              arrowTo: link.direction !== "BOTH",
+            },
           },
-        },
-      };
-    }),
+        };
+      }),
   );
 
   // Filter out duplicate edges.
@@ -223,7 +226,7 @@ const getGraphObjects = (
     unDirectedEdgesAdded[edgeKey] = true;
   }
 
-  let nodes: ElementDefinition[] = Object.values(issues)
+  const nodes: ElementDefinition[] = Object.values(issues)
     // Transform issues to graph nodes.
     .map((issue: IssueInfo) => {
       const colorEntry = getColor(issue.state, fieldInfo?.stateField);
