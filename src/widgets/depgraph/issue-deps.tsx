@@ -32,7 +32,7 @@ import DepGraph from "./dep-graph";
 import DepTimeline from "./dep-timeline";
 import DraggableHeightControl from "./draggable-height-control";
 import exportData from "./export";
-import type { FollowDirection, FollowDirections } from "./fetch-deps";
+import type { FollowDirections } from "./fetch-deps";
 import { fetchDeps, fetchDepsAndExtend, fetchIssueAndInfo } from "./fetch-deps";
 import FilterDropdownMenu, { createFilterState } from "./filter-dropdown-menu";
 import { storeContextGraphSettings } from "./graph-context-ops";
@@ -78,13 +78,25 @@ const parseRelationList = (relations: string | undefined): Array<Relation> => {
   if (relations === undefined) {
     return [];
   }
+  const normalizeDirection = (value: string): DirectionType => {
+    const normalized = value.trim().toUpperCase();
+    if (normalized === "OUTWARD" || normalized === "INWARD" || normalized === "BOTH") {
+      return normalized as DirectionType;
+    }
+    return "BOTH";
+  };
+
+  const normalizeType = (value: string): string => {
+    return value.trim();
+  };
+
   return relations.split(",").map((relation: string) => {
     const [direction, type] = relation.split(":");
     return {
-      direction: direction.trim().toUpperCase() as DirectionType,
-      type: type.trim(),
+      direction: normalizeDirection(direction || ""),
+      type: normalizeType(type || ""),
     };
-  });
+  }).filter((relation) => relation.type.length > 0);
 };
 
 const getRelations = (settings: Settings): Relations | null => {
@@ -175,14 +187,11 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   };
 
   const refreshData = useCallback(async () => {
-    const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
-    if (
-      followDirs.length === 0 ||
-      (relations.upstream.length === 0 && relations.downstream.length === 0)
-    ) {
-      console.log(`Not fetching deps for root ${issueId}, no directions or relations yet...`);
+    if (relations.upstream.length === 0 && relations.downstream.length === 0) {
+      console.log(`Not fetching deps for root ${issueId}, no relations configured yet...`);
       return;
     }
+    const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
     setNote(createLoadingNote("Loading dependencies..."));
     console.log(`Fetching deps for root ${issueId}...`);
 
@@ -218,7 +227,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   }, [host, issueId, maxDepth, relations, settings, graphLoadSettings, useDynamicGraphHeight]);
 
   const loadIssueDeps = useCallback(
-    async (issueId: string, direction: FollowDirection | null = null) => {
+    async (issueId: string) => {
       console.log(`Fetching deps for ${issueId}...`);
       setNote(createLoadingNote("Loading dependencies..."));
       const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
@@ -258,7 +267,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   );
 
   useEffect(() => {
-    if (settings?.maxRecursionDepth !== undefined) {
+    if (settings?.maxRecursionDepth != null) {
       setMaxDepth(settings.maxRecursionDepth);
     }
 
@@ -270,7 +279,20 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
 
   useEffect(() => {
     refreshData();
-  }, [host, issueId, maxDepth, relations]);
+  }, [host, issueId, maxDepth, relations, graphLoadSettings]);
+
+  // Auto-load root node's relations on initial graph loading if they weren't
+  // loaded by refreshData (e.g. due to timing or configuration edge cases).
+  useEffect(() => {
+    if (
+      initialLoadDone.current &&
+      issueId in issueData &&
+      !issueData[issueId].linksKnown &&
+      relations.upstream.length + relations.downstream.length > 0
+    ) {
+      loadIssueDeps(issueId);
+    }
+  }, [issueId, issueData, relations, loadIssueDeps]);
 
   const treeDirectionSelectItems: Array<SelectItem<{ key: HierarchicalDirection }>> = [
     {

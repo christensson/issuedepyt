@@ -251,6 +251,7 @@ const getGraphObjects = (
   fieldInfo: FieldInfo,
   nodeLabelOptions: NodeLabelOptions,
   layoutOptions: LayoutOptions,
+  selectedIssueId: string | null,
 ): ElementDefinition[] => {
   // Deduplicate edges from the perspective of the root node(s) using BFS.
   // For each node pair + link type, only keep the edge emitted by the node
@@ -278,12 +279,12 @@ const getGraphObjects = (
     // Gather all neighbor IDs from visible links.
     const neighborIds = new Set<string>();
     if (current.showUpstream) {
-      for (const link of current.upstreamLinks) {
+      for (const link of current.downstreamLinks) {
         if (link.targetId in issues) neighborIds.add(link.targetId);
       }
     }
     if (current.showDownstream) {
-      for (const link of current.downstreamLinks) {
+      for (const link of current.upstreamLinks) {
         if (link.targetId in issues) neighborIds.add(link.targetId);
       }
     }
@@ -306,12 +307,19 @@ const getGraphObjects = (
     const issue = issues[issueId];
     if (!issue) continue;
 
-    const links = [
-      ...(issue.showUpstream ? issue.upstreamLinks : []),
-      ...(issue.showDownstream ? issue.downstreamLinks : []),
-    ].filter((link: IssueLink) => link.targetId in issues);
+    // Separate upstream and downstream links so we can control edge direction
+    // for the layout algorithm (source is placed above target in TB - Top-Bottom mode).
+    // In the cross-wired model: upstreamLinks targets are children (below),
+    // downstreamLinks targets are parents (above). Swap source/target for
+    // downstreamLinks so parents render above.
+    const upLinks = issue.showDownstream
+      ? issue.upstreamLinks.filter((link: IssueLink) => link.targetId in issues)
+      : [];
+    const downLinks = issue.showUpstream
+      ? issue.downstreamLinks.filter((link: IssueLink) => link.targetId in issues)
+      : [];
 
-    for (const link of links) {
+    for (const link of [...upLinks, ...downLinks]) {
       // Normalize pair key so A-B and B-A with same type map to one slot.
       const pairKey =
         issueId < link.targetId
@@ -328,15 +336,19 @@ const getGraphObjects = (
           ? link.sourceToTarget
           : link.targetToSource;
 
+      // downstreamLinks targets are parents (above) — swap source/target
+      // so the layout places the parent above the current node.
+      const isParentLink = downLinks.includes(link);
+
       edges.push({
         data: {
           id: `${issueId}-${link.targetId}-${link.type}`,
-          source: issueId,
-          target: link.targetId,
+          source: isParentLink ? link.targetId : issueId,
+          target: isParentLink ? issueId : link.targetId,
           label,
           title: label,
-          arrowFrom: link.direction == "OUTWARD" && link.aggregation,
-          arrowTo: link.direction !== "BOTH",
+          arrowFrom: link.direction !== "BOTH",
+          diamondTo: !!link.aggregation,
         },
       });
     }
@@ -361,10 +373,23 @@ const getGraphObjects = (
     }
   }
 
+  const visibleNodeIds = new Set<string>();
+  edges.forEach((edge) => {
+    visibleNodeIds.add(edge.data.source);
+    visibleNodeIds.add(edge.data.target);
+  });
+  if (selectedIssueId && selectedIssueId in issues) {
+    visibleNodeIds.add(selectedIssueId);
+  }
+  if (visibleNodeIds.size === 0) {
+    Object.keys(issues).forEach((id) => visibleNodeIds.add(id));
+  }
+
   const nodes: ElementDefinition[] = Object.values(issues)
     // Only include nodes reachable from root.
     .filter((issue: IssueInfo) => visited.has(issue.id))
     // Transform issues to graph nodes.
+    .filter((issue: IssueInfo) => visibleNodeIds.has(issue.id))
     .map((issue: IssueInfo) => {
       const colorEntry = getColor(issue.state, fieldInfo?.stateField);
       const node: ElementDefinition = {
@@ -533,15 +558,15 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
             },
           },
           {
-            selector: "edge[?arrowTo]",
+            selector: "edge[?arrowFrom]",
             style: {
-              "target-arrow-shape": "triangle",
+              "source-arrow-shape": "triangle",
             },
           },
           {
-            selector: "edge[?arrowFrom]",
+            selector: "edge[?diamondTo]",
             style: {
-              "source-arrow-shape": "diamond",
+              "target-arrow-shape": "diamond",
             },
           },
           {
@@ -555,7 +580,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         ],
         userZoomingEnabled: true,
         userPanningEnabled: true,
-        boxSelectionEnabled: true,
+        boxSelectionEnabled: false,
       });
 
       // Add tooltip support
@@ -577,12 +602,11 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   }, []);
 
+  // Keep Cytoscape's internal size tracking in sync with the container.
   useEffect(() => {
     const observer = new ResizeObserver(() => {
-      if (pendingFit.current && cyRef.current) {
-        pendingFit.current = false;
+      if (cyRef.current) {
         cyRef.current.resize();
-        smartFitGraph(cyRef.current);
       }
     });
 
@@ -591,6 +615,17 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
     return () => observer.disconnect();
   }, []);
+
+  // After a grow request changes the container height, re-fit the graph.
+  // This runs deterministically after React commits the DOM change, so
+  // cy.resize() + smartFitGraph always see the correct container size.
+  useEffect(() => {
+    if (pendingFit.current && cyRef.current) {
+      pendingFit.current = false;
+      cyRef.current.resize();
+      smartFitGraph(cyRef.current);
+    }
+  }, [height]);
 
   const getLayoutOptions = (layoutOptions: LayoutOptions) => {
     if (layoutOptions.hierarchical) {
@@ -708,7 +743,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
       const nodeLabelOpts = graphViewSettings.nodeLabelOptions;
       const layoutOpts = graphViewSettings.layoutOptions;
-      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOpts, layoutOpts);
+      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOpts, layoutOpts, selectedIssueId);
 
       // Replace all elements.
       cy.elements().remove();
@@ -728,7 +763,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, graphViewSettings]);
+  }, [issues, fieldInfo, filterState, graphViewSettings, onRequestGrow, selectedIssueId]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {
@@ -763,7 +798,6 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       }
     }
   }, [selectedIssueId]);
-
   const fitGraph = () => {
     if (cyRef.current) {
       const cy = cyRef.current;

@@ -1,8 +1,8 @@
+import React, { memo, useEffect, useMemo, useState } from "react";
 import Alert from "@jetbrains/ring-ui-built/components/alert/alert";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
 import { Col, Grid, Row } from "@jetbrains/ring-ui-built/components/grid/grid";
 import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
-import React, { memo, useEffect, useMemo, useState } from "react";
 import {
   defaultGraphLoadSettings,
   GraphContext,
@@ -27,7 +27,7 @@ const AppComponent: React.FunctionComponent = () => {
     useState<GraphViewSettings>(defaultGraphViewSettings);
   const [note, setNote] = useState<NoteProps | null>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     if (!graphVisible && settings?.autoLoadDeps) {
       console.log("Auto loading deps: Showing graph.");
       setGraphVisible(true);
