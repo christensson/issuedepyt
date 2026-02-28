@@ -302,7 +302,7 @@ div.dep-graph-controls {
   margin: var(--ring-unit);
   padding: calc(var(--ring-unit) / 2);
   z-index: 2;
-  background-color: white;
+  background-color: var(--ring-content-background-color, white);
   border-radius: var(--ring-border-radius);
   border: 1px solid var(--ring-borders-color);
   gap: calc(var(--ring-unit) / 2);
@@ -315,7 +315,7 @@ div.dep-graph-node-controls {
   margin: var(--ring-unit);
   padding: calc(var(--ring-unit) / 2);
   z-index: 2;
-  background-color: white;
+  background-color: var(--ring-content-background-color, white);
   border-radius: var(--ring-border-radius);
   border: 1px solid var(--ring-borders-color);
   gap: calc(var(--ring-unit) / 2);
