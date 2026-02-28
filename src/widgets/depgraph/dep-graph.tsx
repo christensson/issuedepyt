@@ -613,6 +613,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       }
     }
   }, [selectedIssueId]);
+
   const fitGraph = () => {
     if (cyRef.current) {
       const cy = cyRef.current;
