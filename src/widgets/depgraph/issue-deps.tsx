@@ -113,13 +113,25 @@ const parseRelationList = (relations: string | undefined): Array<Relation> => {
   if (relations === undefined) {
     return [];
   }
+  const normalizeDirection = (value: string): DirectionType => {
+    const normalized = value.trim().toUpperCase();
+    if (normalized === "OUTWARD" || normalized === "INWARD" || normalized === "BOTH") {
+      return normalized as DirectionType;
+    }
+    return "BOTH";
+  };
+
+  const normalizeType = (value: string): string => {
+    return value.trim().replace(/\s+/g, " ");
+  };
+
   return relations.split(",").map((relation: string) => {
     const [direction, type] = relation.split(":");
     return {
-      direction: direction.trim().toUpperCase() as DirectionType,
-      type: type.trim(),
+      direction: normalizeDirection(direction || ""),
+      type: normalizeType(type || ""),
     };
-  });
+  }).filter((relation) => relation.type.length > 0);
 };
 
 const getRelations = (settings: Settings): Relations | null => {
@@ -335,14 +347,14 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               <Group>
                 <Checkbox
                   label="Show upstream"
-                  checked={issueData[selectedNode].showUpstream}
+                  checked={issueData[selectedNode].showUpstreamNodes}
                   onChange={(e: any) =>
                     setIssueData((issues) => {
                       if (selectedNode in issues) {
                         const updatedIssues = { ...issues };
                         updatedIssues[selectedNode] = {
                           ...updatedIssues[selectedNode],
-                          showUpstream: e.target.checked,
+                          showUpstreamNodes: e.target.checked,
                         };
                         return updatedIssues;
                       }
@@ -352,14 +364,14 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 />
                 <Checkbox
                   label="Show downstream"
-                  checked={issueData[selectedNode].showDownstream}
+                  checked={issueData[selectedNode].showDownstreamNodes}
                   onChange={(e: any) =>
                     setIssueData((issues) => {
                       if (selectedNode in issues) {
                         const updatedIssues = { ...issues };
                         updatedIssues[selectedNode] = {
                           ...updatedIssues[selectedNode],
-                          showDownstream: e.target.checked,
+                          showDownstreamNodes: e.target.checked,
                         };
                         return updatedIssues;
                       }

@@ -18,7 +18,7 @@ import fcose from "cytoscape-fcose";
 import type { FieldInfo, FieldInfoField } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
 import { Color, ColorPaletteItem, hexToRgb, rgbToHex } from "./colors";
-import { filterIssues } from "./issue-helpers";
+import { filterByReachability, filterIssues } from "./issue-helpers";
 import type { IssueInfo, IssueLink } from "./issue-types";
 
 const GRAPH_PADDING = 20;
@@ -203,32 +203,80 @@ const getGraphObjects = (
   issues: { [key: string]: IssueInfo },
   fieldInfo: FieldInfo,
   nodeLabelOptions: NodeLabelOptions,
+  selectedIssueId: string | null,
 ): ElementDefinition[] => {
-  const linkInfo = {};
   const linksAndEdges = Object.values(issues).flatMap((issue: IssueInfo) =>
     [
-      ...(issue.showUpstream ? issue.upstreamLinks : []),
-      ...(issue.showDownstream ? issue.downstreamLinks : []),
+      // upstreamLinks target YT-upstream nodes (visually below), gated by showDownstreamNodes.
+      ...(issue.showDownstreamNodes
+        ? issue.upstreamLinks.map((link: IssueLink) => ({
+            link,
+            configuredRelationKind: "upstream" as const,
+          }))
+        : []),
+      // downstreamLinks target YT-downstream nodes (visually above), gated by showUpstreamNodes.
+      ...(issue.showUpstreamNodes
+        ? issue.downstreamLinks.map((link: IssueLink) => ({
+            link,
+            configuredRelationKind: "downstream" as const,
+          }))
+        : []),
+      ...(!issue.showDownstreamNodes
+        ? issue.upstreamLinks
+            .filter((link: IssueLink) => link.direction === "BOTH")
+            .map((link: IssueLink) => ({
+              link,
+              configuredRelationKind: "upstream" as const,
+            }))
+        : []),
+      ...(!issue.showUpstreamNodes
+        ? issue.downstreamLinks
+            .filter((link: IssueLink) => link.direction === "BOTH")
+            .map((link: IssueLink) => ({
+              link,
+              configuredRelationKind: "downstream" as const,
+            }))
+        : []),
     ]
       // Only include links where the target issue exists.
-      .filter((link: IssueLink) => link.targetId in issues)
-      .map((link: IssueLink) => {
+      .filter(({ link }) => link.targetId in issues)
+      .map(({ link, configuredRelationKind }) => {
+        const relationKind = configuredRelationKind;
+
+        // Layout direction: source/target are assigned so that downstream-linked
+        // nodes (visually upstream / above) become graph sources and upstream-linked
+        // nodes (visually downstream / below) become graph targets.
+        const isUpstream = relationKind === "upstream";
+        const source = isUpstream ? issue.id : link.targetId;
+        const target = isUpstream ? link.targetId : issue.id;
+
+        // Edge label: always from the current issue's perspective, matching what
+        // YouTrack shows for this issue. E.g. B "is required for" C, or B "depends on" A.
         const label =
           link.direction === "OUTWARD" || link.direction === "BOTH"
             ? link.sourceToTarget
             : link.targetToSource;
+
+        // Arrow direction: the semantic arrow goes from the current issue toward
+        // the linked issue (matching the label direction).
+        // Because source/target are swapped for visual layout, the arrow flags
+        // are also swapped to keep arrows pointing in the correct semantic direction.
+        const isDirected = link.direction !== "BOTH";
+        const arrowTo = isDirected && isUpstream;
+        const arrowFrom = isDirected && !isUpstream;
+
         return {
           direction: link.direction,
           type: link.type,
           edge: {
             data: {
               id: `${issue.id}-${link.targetId}-${link.type}`,
-              source: issue.id,
-              target: link.targetId,
+              source,
+              target,
               label,
               title: label,
-              arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
-              arrowTo: link.direction !== "BOTH",
+              arrowFrom,
+              arrowTo,
             },
           },
         };
@@ -236,30 +284,37 @@ const getGraphObjects = (
   );
 
   // Filter out duplicate edges.
+  // When both nodes of a relationship have their links loaded, each side
+  // produces an edge for the same underlying link (e.g. "depends on" from A
+  // and "is required for" from B). Deduplicate by checking both directions.
   let edges: ElementDefinition[] = [];
-  const unDirectedEdgesAdded: { [key: string]: boolean } = {};
+  const edgesAdded: { [key: string]: boolean } = {};
   for (const { direction, type, edge } of linksAndEdges) {
-    // Include all directed edges.
-    if (direction !== "BOTH") {
-      edges.push(edge);
-      continue;
-    }
-
-    // If non-directed, check if already added.
-    const reverseEdgeKey = `${type}-${edge.data.target}-${edge.data.source}`;
-
-    if (reverseEdgeKey in unDirectedEdgesAdded) {
-      continue;
-    }
-
-    // Add and mark as added.
-    edges.push(edge);
     const edgeKey = `${type}-${edge.data.source}-${edge.data.target}`;
-    unDirectedEdgesAdded[edgeKey] = true;
+    const reverseEdgeKey = `${type}-${edge.data.target}-${edge.data.source}`;
+    if (edgeKey in edgesAdded || reverseEdgeKey in edgesAdded) {
+      continue;
+    }
+
+    edges.push(edge);
+    edgesAdded[edgeKey] = true;
+  }
+
+  const visibleNodeIds = new Set<string>();
+  edges.forEach((edge) => {
+    visibleNodeIds.add(edge.data.source);
+    visibleNodeIds.add(edge.data.target);
+  });
+  if (selectedIssueId && selectedIssueId in issues) {
+    visibleNodeIds.add(selectedIssueId);
+  }
+  if (visibleNodeIds.size === 0) {
+    Object.keys(issues).forEach((id) => visibleNodeIds.add(id));
   }
 
   const nodes: ElementDefinition[] = Object.values(issues)
     // Transform issues to graph nodes.
+    .filter((issue: IssueInfo) => visibleNodeIds.has(issue.id))
     .map((issue: IssueInfo) => {
       const colorEntry = getColor(issue.state, fieldInfo?.stateField);
       const node: ElementDefinition = {
@@ -430,7 +485,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
           {
             selector: "edge[?arrowFrom]",
             style: {
-              "source-arrow-shape": "diamond",
+              "source-arrow-shape": "triangle",
             },
           },
           {
@@ -444,7 +499,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         ],
         userZoomingEnabled: true,
         userPanningEnabled: true,
-        boxSelectionEnabled: true,
+        boxSelectionEnabled: false,
       });
 
       // Add tooltip support
@@ -560,9 +615,14 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   useEffect(() => {
     if (cyRef.current) {
       const cy = cyRef.current;
-      const visibleIssues = filterIssues(filterState, issues);
+      const visibleIssues = filterByReachability(filterIssues(filterState, issues));
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
-      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOptions);
+      const elements = getGraphObjects(
+        visibleIssues,
+        fieldInfo,
+        nodeLabelOptions,
+        selectedIssueId,
+      );
 
       // Replace all elements.
       cy.elements().remove();
@@ -578,7 +638,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, nodeLabelOptions, layoutOptions]);
+  }, [issues, fieldInfo, filterState, nodeLabelOptions, layoutOptions, selectedIssueId]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {
@@ -613,7 +673,6 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       }
     }
   }, [selectedIssueId]);
-
   const fitGraph = () => {
     if (cyRef.current) {
       const cy = cyRef.current;

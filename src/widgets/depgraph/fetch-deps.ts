@@ -162,6 +162,50 @@ const getExtraFields = (
   return customFields;
 };
 
+const normalizeDirection = (value: string | undefined): string => {
+  return (value || "").trim().toUpperCase();
+};
+
+const normalizeRelationType = (value: string | undefined): string => {
+  return (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+};
+
+const relationMatches = (
+  relationDirection: string,
+  relationType: string,
+  linkDirection: string,
+  linkType: string,
+): boolean => {
+  return (
+    normalizeDirection(relationDirection) === normalizeDirection(linkDirection) &&
+    normalizeRelationType(relationType) === normalizeRelationType(linkType)
+  );
+};
+
+const getRelationKind = (
+  relations: Relations,
+  linkDirection: string,
+  linkType: string,
+): FollowDirection | null => {
+  const isUpstream = relations.upstream.some((relation) =>
+    relationMatches(relation.direction, relation.type, linkDirection, linkType),
+  );
+  const isDownstream = relations.downstream.some((relation) =>
+    relationMatches(relation.direction, relation.type, linkDirection, linkType),
+  );
+
+  if (isUpstream && !isDownstream) {
+    return "upstream";
+  }
+  if (isDownstream && !isUpstream) {
+    return "downstream";
+  }
+  return null;
+};
+
 async function fetchDepsRecursive(
   host: HostAPI,
   issueID: string,
@@ -202,10 +246,8 @@ async function fetchDepsRecursive(
   */
   const followLinks = [...relations.upstream, ...relations.downstream];
   const linksToFollow = links.filter((link: any) => {
-    return followLinks.some(
-      (relation) =>
-        link.direction === relation.direction &&
-        link.linkType.name.toLowerCase() === relation.type.toLowerCase()
+    return followLinks.some((relation) =>
+      relationMatches(relation.direction, relation.type, link.direction, link.linkType.name),
     );
   });
 
@@ -243,12 +285,8 @@ async function fetchDepsRecursive(
     }))
   );
   for (const link of linksFlat) {
-    const isUpstream = relations.upstream.some(
-      (relation) =>
-        link.direction === relation.direction &&
-        link.linkType.toLowerCase() === relation.type.toLowerCase()
-    );
-    const linksList = isUpstream ? issue.upstreamLinks : issue.downstreamLinks;
+    const relationKind = getRelationKind(relations, link.direction, link.linkType);
+    const linksList = relationKind === "upstream" ? issue.upstreamLinks : issue.downstreamLinks;
     const linkExist = linksList.some(
       (x) => link.id === x.targetId && link.direction === x.direction && link.linkType === x.type
     );
@@ -266,11 +304,7 @@ async function fetchDepsRecursive(
   }
 
   for (const link of linksFlat) {
-    const isUpstream = relations.upstream.some(
-      (relation) =>
-        link.direction === relation.direction &&
-        link.linkType.toLowerCase() === relation.type.toLowerCase()
-    );
+    const relationKind = getRelationKind(relations, link.direction, link.linkType);
 
     if (!(link.id in issues)) {
       issues[link.id] = {
@@ -290,8 +324,8 @@ async function fetchDepsRecursive(
         upstreamLinks: [],
         downstreamLinks: [],
         linksKnown: false,
-        showUpstream: false,
-        showDownstream: false,
+        showUpstreamNodes: true,
+        showDownstreamNodes: false,
         extraFields: link.extraFields,
       };
     }
@@ -308,7 +342,8 @@ async function fetchDepsRecursive(
     };
 
     const targetIssue = issues[link.id];
-    const mirroredLinksList = isUpstream ? targetIssue.downstreamLinks : targetIssue.upstreamLinks;
+    const mirroredLinksList =
+      relationKind === "upstream" ? targetIssue.downstreamLinks : targetIssue.upstreamLinks;
     const mirroredLinkExist = mirroredLinksList.some(
       (x) =>
         mirroredLink.targetId === x.targetId &&
@@ -322,10 +357,10 @@ async function fetchDepsRecursive(
 
   issue.linksKnown = true;
   if (followDirs.includes("upstream")) {
-    issue.showUpstream = true;
+    issue.showUpstreamNodes = true;
   }
   if (followDirs.includes("downstream")) {
-    issue.showDownstream = true;
+    issue.showDownstreamNodes = true;
   }
 
   const isSameLink = (a: IssueLink, b: IssueLink) =>
@@ -422,8 +457,8 @@ export async function fetchIssueAndInfo(
     upstreamLinks: [],
     downstreamLinks: [],
     linksKnown: false,
-    showDownstream: false,
-    showUpstream: false,
+    showDownstreamNodes: false,
+    showUpstreamNodes: true,
     extraFields: getExtraFields(settings?.extraCustomFields, issueInfo.customFields),
   };
 

@@ -14,7 +14,7 @@ const AppComponent: React.FunctionComponent = () => {
   const [settings, setSettings] = useState<Settings>({});
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
   const [followUpstream, setFollowUpstream] = useState<boolean>(true);
-  const [followDownstream, setFollowDownstream] = useState<boolean>(false);
+  const [followDownstream, setFollowDownstream] = useState<boolean>(true);
 
   useMemo(() => {
     if (!graphVisible && settings?.autoLoadDeps) {
