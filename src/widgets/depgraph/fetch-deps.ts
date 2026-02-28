@@ -162,6 +162,86 @@ const getExtraFields = (
   return customFields;
 };
 
+const buildIssueInfo = (
+  rawIssue: any,
+  settings: Settings,
+  depth: number,
+): IssueInfo => {
+  return {
+    id: rawIssue.id,
+    idReadable: rawIssue.isDraft ? `Draft ${rawIssue.id}` : rawIssue.idReadable,
+    isDraft: rawIssue.isDraft,
+    summary: rawIssue.summary,
+    ...(settings?.typeField && {
+      type: getCustomFieldValue(settings.typeField, rawIssue.customFields),
+    }),
+    ...(settings?.stateField && {
+      state: getCustomFieldValue(settings.stateField, rawIssue.customFields),
+    }),
+    ...(settings?.sprintsField && {
+      sprints: getCustomFieldValue(settings.sprintsField, rawIssue.customFields),
+    }),
+    ...(settings?.assigneeField && {
+      assignee: getCustomFieldValue(settings.assigneeField, rawIssue.customFields),
+    }),
+    startDate: getCustomFieldValue(settings?.startDateField, rawIssue.customFields),
+    dueDate: getCustomFieldValue(settings?.dueDateField, rawIssue.customFields),
+    estimation: getCustomFieldValue(settings?.estimationField, rawIssue.customFields),
+    resolved: rawIssue.resolved,
+    depth,
+    upstreamLinks: [],
+    downstreamLinks: [],
+    linksKnown: false,
+    showUpstreamNodes: true,
+    showDownstreamNodes: false,
+    extraFields: getExtraFields(settings?.extraCustomFields, rawIssue.customFields),
+  };
+};
+
+const normalizeDirection = (value: string | undefined): string => {
+  return (value || "").trim().toUpperCase();
+};
+
+const normalizeRelationType = (value: string | undefined): string => {
+  return (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+};
+
+const relationMatches = (
+  relationDirection: string,
+  relationType: string,
+  linkDirection: string,
+  linkType: string,
+): boolean => {
+  return (
+    normalizeDirection(relationDirection) === normalizeDirection(linkDirection) &&
+    normalizeRelationType(relationType) === normalizeRelationType(linkType)
+  );
+};
+
+const getRelationKind = (
+  relations: Relations,
+  linkDirection: string,
+  linkType: string,
+): FollowDirection | null => {
+  const isUpstream = relations.upstream.some((relation) =>
+    relationMatches(relation.direction, relation.type, linkDirection, linkType),
+  );
+  const isDownstream = relations.downstream.some((relation) =>
+    relationMatches(relation.direction, relation.type, linkDirection, linkType),
+  );
+
+  if (isUpstream && !isDownstream) {
+    return "upstream";
+  }
+  if (isDownstream && !isUpstream) {
+    return "downstream";
+  }
+  return null;
+};
+
 async function fetchDepsRecursive(
   host: HostAPI,
   issueID: string,
@@ -172,7 +252,7 @@ async function fetchDepsRecursive(
   settings: Settings,
   issues: { [key: string]: IssueInfo }
 ): Promise<any> {
-  if (depth == maxDepth + 1) {
+  if (depth > maxDepth) {
     return;
   }
 
@@ -202,36 +282,15 @@ async function fetchDepsRecursive(
   */
   const followLinks = [...relations.upstream, ...relations.downstream];
   const linksToFollow = links.filter((link: any) => {
-    return followLinks.some(
-      (relation) =>
-        link.direction === relation.direction &&
-        link.linkType.name.toLowerCase() === relation.type.toLowerCase()
+    return followLinks.some((relation) =>
+      relationMatches(relation.direction, relation.type, link.direction, link.linkType.name),
     );
   });
 
   const linksFlat = linksToFollow.flatMap((link: any) =>
     link.issues.map((issue: any) => ({
-      id: issue.id,
-      idReadable: issue.isDraft ? `Draft ${issue.id}` : issue.idReadable,
-      isDraft: issue.isDraft,
+      issue,
       sourceId: issueID,
-      summary: issue.summary,
-      ...(settings?.typeField && {
-        type: getCustomFieldValue(settings.typeField, issue.customFields),
-      }),
-      ...(settings?.stateField && {
-        state: getCustomFieldValue(settings.stateField, issue.customFields),
-      }),
-      ...(settings?.sprintsField && {
-        sprints: getCustomFieldValue(settings.sprintsField, issue.customFields),
-      }),
-      ...(settings?.assigneeField && {
-        assignee: getCustomFieldValue(settings.assigneeField, issue.customFields),
-      }),
-      startDate: getCustomFieldValue(settings?.startDateField, issue.customFields),
-      dueDate: getCustomFieldValue(settings?.dueDateField, issue.customFields),
-      estimation: getCustomFieldValue(settings?.estimationField, issue.customFields),
-      resolved: issue.resolved,
       direction: link.direction,
       linkType: link.linkType.name,
       targetToSource: link.linkType.targetToSource,
@@ -239,25 +298,20 @@ async function fetchDepsRecursive(
       relation:
         link.direction == "INWARD" ? link.linkType.targetToSource : link.linkType.sourceToTarget,
       depth: depth,
-      extraFields: getExtraFields(settings?.extraCustomFields, issue.customFields),
     }))
   );
   for (const link of linksFlat) {
-    const isUpstream = relations.upstream.some(
-      (relation) =>
-        link.direction === relation.direction &&
-        link.linkType.toLowerCase() === relation.type.toLowerCase()
-    );
-    const linksList = isUpstream ? issue.upstreamLinks : issue.downstreamLinks;
+    const relationKind = getRelationKind(relations, link.direction, link.linkType);
+    const linksList = relationKind === "upstream" ? issue.upstreamLinks : issue.downstreamLinks;
     const linkExist = linksList.some(
-      (x) => link.id === x.targetId && link.direction === x.direction && link.linkType === x.type
+      (x) => link.issue.id === x.targetId && link.direction === x.direction && link.linkType === x.type
     );
     if (linkExist) {
       continue;
     }
     linksList.push({
-      targetId: link.id,
-      targetIdReadable: link.idReadable,
+      targetId: link.issue.id,
+      targetIdReadable: link.issue.isDraft ? `Draft ${link.issue.id}` : link.issue.idReadable,
       type: link.linkType,
       direction: link.direction,
       targetToSource: link.targetToSource,
@@ -266,34 +320,10 @@ async function fetchDepsRecursive(
   }
 
   for (const link of linksFlat) {
-    const isUpstream = relations.upstream.some(
-      (relation) =>
-        link.direction === relation.direction &&
-        link.linkType.toLowerCase() === relation.type.toLowerCase()
-    );
+    const relationKind = getRelationKind(relations, link.direction, link.linkType);
 
-    if (!(link.id in issues)) {
-      issues[link.id] = {
-        id: link.id,
-        idReadable: link.isDraft ? `Draft ${link.id}` : link.idReadable,
-        isDraft: link.isDraft,
-        summary: link.summary,
-        type: link.type,
-        state: link.state,
-        sprints: link.sprints,
-        assignee: link.assignee,
-        startDate: link.startDate,
-        dueDate: link.dueDate,
-        estimation: link.estimation,
-        resolved: link.resolved,
-        depth: link.depth,
-        upstreamLinks: [],
-        downstreamLinks: [],
-        linksKnown: false,
-        showUpstream: false,
-        showDownstream: false,
-        extraFields: link.extraFields,
-      };
+    if (!(link.issue.id in issues)) {
+      issues[link.issue.id] = buildIssueInfo(link.issue, settings, link.depth);
     }
 
     // Invert link and inject that in target issue if not already present.
@@ -307,8 +337,9 @@ async function fetchDepsRecursive(
       sourceToTarget: link.sourceToTarget,
     };
 
-    const targetIssue = issues[link.id];
-    const mirroredLinksList = isUpstream ? targetIssue.downstreamLinks : targetIssue.upstreamLinks;
+    const targetIssue = issues[link.issue.id];
+    const mirroredLinksList =
+      relationKind === "upstream" ? targetIssue.downstreamLinks : targetIssue.upstreamLinks;
     const mirroredLinkExist = mirroredLinksList.some(
       (x) =>
         mirroredLink.targetId === x.targetId &&
@@ -322,24 +353,26 @@ async function fetchDepsRecursive(
 
   issue.linksKnown = true;
   if (followDirs.includes("upstream")) {
-    issue.showUpstream = true;
+    issue.showUpstreamNodes = true;
   }
   if (followDirs.includes("downstream")) {
-    issue.showDownstream = true;
+    issue.showDownstreamNodes = true;
   }
 
   const isSameLink = (a: IssueLink, b: IssueLink) =>
     a.targetId === b.targetId && a.direction === b.direction && a.type === b.type;
   const idsToFetch: Array<string> = [];
+  // downstreamLinks targets are upstream nodes — follow them when going upstream.
   if (followDirs.includes("upstream")) {
-    const newLinks = issue.upstreamLinks.filter(
-      (link: IssueLink) => !prevIssueUpstreamLinks.some((x) => isSameLink(x, link))
+    const newLinks = issue.downstreamLinks.filter(
+      (link: IssueLink) => !prevIssueDownstreamLinks.some((x) => isSameLink(x, link))
     );
     idsToFetch.push(...newLinks.map((link: IssueLink) => link.targetId));
   }
+  // upstreamLinks targets are downstream nodes — follow them when going downstream.
   if (followDirs.includes("downstream")) {
-    const newLinks = issue.downstreamLinks.filter(
-      (link: IssueLink) => !prevIssueDownstreamLinks.some((x) => isSameLink(x, link))
+    const newLinks = issue.upstreamLinks.filter(
+      (link: IssueLink) => !prevIssueUpstreamLinks.some((x) => isSameLink(x, link))
     );
     idsToFetch.push(...newLinks.map((link: IssueLink) => link.targetId));
   }
@@ -347,7 +380,6 @@ async function fetchDepsRecursive(
     fetchDepsRecursive(host, id, depth + 1, maxDepth, relations, followDirs, settings, issues)
   );
   await Promise.all(promises);
-  return;
 }
 
 export async function fetchIssueAndInfo(
@@ -397,35 +429,7 @@ export async function fetchIssueAndInfo(
     });
   }
 
-  const issue: IssueInfo = {
-    id: issueInfo.id,
-    idReadable: issueInfo.isDraft ? `Draft ${issueInfo.id}` : issueInfo.idReadable,
-    isDraft: issueInfo.isDraft,
-    summary: issueInfo.summary,
-    ...(settings?.typeField && {
-      type: getCustomFieldValue(settings.typeField, issueInfo.customFields),
-    }),
-    ...(settings?.stateField && {
-      state: getCustomFieldValue(settings.stateField, issueInfo.customFields),
-    }),
-    ...(settings?.sprintsField && {
-      sprints: getCustomFieldValue(settings.sprintsField, issueInfo.customFields),
-    }),
-    ...(settings?.assigneeField && {
-      assignee: getCustomFieldValue(settings.assigneeField, issueInfo.customFields),
-    }),
-    startDate: getCustomFieldValue(settings?.startDateField, issueInfo.customFields),
-    dueDate: getCustomFieldValue(settings?.dueDateField, issueInfo.customFields),
-    estimation: getCustomFieldValue(settings?.estimationField, issueInfo.customFields),
-    resolved: issueInfo.resolved,
-    depth: 0,
-    upstreamLinks: [],
-    downstreamLinks: [],
-    linksKnown: false,
-    showDownstream: false,
-    showUpstream: false,
-    extraFields: getExtraFields(settings?.extraCustomFields, issueInfo.customFields),
-  };
+  const issue: IssueInfo = buildIssueInfo(issueInfo, settings, 0);
 
   return { issue, fieldInfo };
 }

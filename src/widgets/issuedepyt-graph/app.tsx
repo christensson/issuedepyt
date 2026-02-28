@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState, useEffect } from "react";
+import React, { memo, useState, useEffect } from "react";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
 import { Grid, Row, Col } from "@jetbrains/ring-ui-built/components/grid/grid";
 import Toggle from "@jetbrains/ring-ui-built/components/toggle/toggle";
@@ -16,7 +16,7 @@ const AppComponent: React.FunctionComponent = () => {
   const [followUpstream, setFollowUpstream] = useState<boolean>(true);
   const [followDownstream, setFollowDownstream] = useState<boolean>(false);
 
-  useMemo(() => {
+  useEffect(() => {
     if (!graphVisible && settings?.autoLoadDeps) {
       console.log("Auto loading deps: Showing graph.");
       setGraphVisible(true);

@@ -28,7 +28,7 @@ import DepGraph, {
 } from "./dep-graph";
 import DepTimeline from "./dep-timeline";
 import exportData from "./export";
-import type { FollowDirection, FollowDirections } from "./fetch-deps";
+import type { FollowDirections } from "./fetch-deps";
 import { fetchDeps, fetchDepsAndExtend, fetchIssueAndInfo } from "./fetch-deps";
 import FilterDropdownMenu, { createFilterState } from "./filter-dropdown-menu";
 import IssueInfoCard from "./issue-info-card";
@@ -76,13 +76,25 @@ const parseRelationList = (relations: string | undefined): Array<Relation> => {
   if (relations === undefined) {
     return [];
   }
+  const normalizeDirection = (value: string): DirectionType => {
+    const normalized = value.trim().toUpperCase();
+    if (normalized === "OUTWARD" || normalized === "INWARD" || normalized === "BOTH") {
+      return normalized as DirectionType;
+    }
+    return "BOTH";
+  };
+
+  const normalizeType = (value: string): string => {
+    return value.trim();
+  };
+
   return relations.split(",").map((relation: string) => {
     const [direction, type] = relation.split(":");
     return {
-      direction: direction.trim().toUpperCase() as DirectionType,
-      type: type.trim(),
+      direction: normalizeDirection(direction || ""),
+      type: normalizeType(type || ""),
     };
-  });
+  }).filter((relation) => relation.type.length > 0);
 };
 
 const getRelations = (settings: Settings): Relations | null => {
@@ -232,7 +244,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   ]);
 
   const loadIssueDeps = useCallback(
-    async (issueId: string, direction: FollowDirection | null = null) => {
+    async (issueId: string) => {
       console.log(`Fetching deps for ${issueId}...`);
       setLoading(true);
       const followDirs: FollowDirections = getFollowDirections(followUpstream, followDownstream);
@@ -331,14 +343,14 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               <Group>
                 <Checkbox
                   label="Show upstream"
-                  checked={issueData[selectedNode].showUpstream}
+                  checked={issueData[selectedNode].showUpstreamNodes}
                   onChange={(e: any) =>
                     setIssueData((issues) => {
                       if (selectedNode in issues) {
                         const updatedIssues = { ...issues };
                         updatedIssues[selectedNode] = {
                           ...updatedIssues[selectedNode],
-                          showUpstream: e.target.checked,
+                          showUpstreamNodes: e.target.checked,
                         };
                         return updatedIssues;
                       }
@@ -348,14 +360,14 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 />
                 <Checkbox
                   label="Show downstream"
-                  checked={issueData[selectedNode].showDownstream}
+                  checked={issueData[selectedNode].showDownstreamNodes}
                   onChange={(e: any) =>
                     setIssueData((issues) => {
                       if (selectedNode in issues) {
                         const updatedIssues = { ...issues };
                         updatedIssues[selectedNode] = {
                           ...updatedIssues[selectedNode],
-                          showDownstream: e.target.checked,
+                          showDownstreamNodes: e.target.checked,
                         };
                         return updatedIssues;
                       }
