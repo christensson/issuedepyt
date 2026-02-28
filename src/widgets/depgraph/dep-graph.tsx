@@ -444,7 +444,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         ],
         userZoomingEnabled: true,
         userPanningEnabled: true,
-        boxSelectionEnabled: false,
+        boxSelectionEnabled: true,
       });
 
       // Add tooltip support
