@@ -1,3 +1,5 @@
+import DoubleChevronLeft from "@jetbrains/icons/double-chevron-left";
+import DoubleChevronRight from "@jetbrains/icons/double-chevron-right";
 import DownloadIcon from "@jetbrains/icons/download";
 import ExpandAllIcon from "@jetbrains/icons/expand-all";
 import InfoIcon from "@jetbrains/icons/info";
@@ -163,6 +165,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     showOrphans: false,
     showWhenLinksUnknown: true,
   });
+  const [graphNodeControlsOpen, setGraphNodeControlsOpen] = useState<boolean>(true);
 
   const selectNode = (nodeId: string) => {
     setHighlightedNodes(null);
@@ -491,84 +494,109 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           onOpenNode={openNode}
         >
           <div className={"dep-graph-node-controls"}>
-            <Toggle
-              size={ToggleSize.Size14}
-              checked={layoutOptions.hierarchical}
-              onChange={(e: any) =>
-                setLayoutOptions((prev) => ({ ...prev, hierarchical: e.target.checked }))
-              }
-            >
-              Tree layout
-            </Toggle>
-            {layoutOptions.hierarchical && (
-              <Toggle
-                size={ToggleSize.Size14}
-                checked={layoutOptions.alternateTreeLayout}
-                onChange={(e: any) =>
-                  setLayoutOptions((prev) => ({ ...prev, alternateTreeLayout: e.target.checked }))
-                }
-              >
-                Alternate tree layout
-              </Toggle>
-            )}
-            {layoutOptions.hierarchical && (
-              <Select
-                data={treeDirectionSelectItems}
-                selected={treeDirectionSelectItems.find(
-                  (item) => item.key === layoutOptions.hierarchicalDirection,
+            {graphNodeControlsOpen && (
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <Toggle
+                  size={ToggleSize.Size14}
+                  checked={layoutOptions.hierarchical}
+                  onChange={(e: any) =>
+                    setLayoutOptions((prev) => ({ ...prev, hierarchical: e.target.checked }))
+                  }
+                >
+                  Tree layout
+                </Toggle>
+                {layoutOptions.hierarchical && (
+                  <Toggle
+                    size={ToggleSize.Size14}
+                    checked={layoutOptions.alternateTreeLayout}
+                    onChange={(e: any) =>
+                      setLayoutOptions((prev) => ({
+                        ...prev,
+                        alternateTreeLayout: e.target.checked,
+                      }))
+                    }
+                  >
+                    Alternate tree layout
+                  </Toggle>
                 )}
-                onSelect={(selected: SelectItem<{ key: HierarchicalDirection }> | null) => {
-                  if (!selected) return;
-                  setLayoutOptions((prev) => ({ ...prev, hierarchicalDirection: selected.key }));
-                }}
-                type={Select.Type.INLINE}
-              />
+                {layoutOptions.hierarchical && (
+                  <Select
+                    data={treeDirectionSelectItems}
+                    selected={treeDirectionSelectItems.find(
+                      (item) => item.key === layoutOptions.hierarchicalDirection,
+                    )}
+                    onSelect={(selected: SelectItem<{ key: HierarchicalDirection }> | null) => {
+                      if (!selected) return;
+                      setLayoutOptions((prev) => ({
+                        ...prev,
+                        hierarchicalDirection: selected.key,
+                      }));
+                    }}
+                    type={Select.Type.INLINE}
+                  />
+                )}
+                <Toggle
+                  size={ToggleSize.Size14}
+                  checked={
+                    !nodeLabelOptions.showType &&
+                    !nodeLabelOptions.showSummary &&
+                    !nodeLabelOptions.showFlags
+                  }
+                  onChange={(e: any) =>
+                    setNodeLabelOptions((prev) => ({
+                      ...prev,
+                      showType: !e.target.checked,
+                      showSummary: !e.target.checked,
+                      showFlags: !e.target.checked,
+                    }))
+                  }
+                >
+                  Only ticket ID
+                </Toggle>
+                <Toggle
+                  size={ToggleSize.Size14}
+                  checked={nodeLabelOptions.showType}
+                  onChange={(e: any) =>
+                    setNodeLabelOptions((prev) => ({ ...prev, showType: e.target.checked }))
+                  }
+                >
+                  Ticket types
+                </Toggle>
+                <Toggle
+                  size={ToggleSize.Size14}
+                  checked={nodeLabelOptions.showSummary}
+                  onChange={(e: any) =>
+                    setNodeLabelOptions((prev) => ({ ...prev, showSummary: e.target.checked }))
+                  }
+                >
+                  Ticket summary
+                </Toggle>
+                <Toggle
+                  size={ToggleSize.Size14}
+                  checked={nodeLabelOptions.showFlags}
+                  onChange={(e: any) =>
+                    setNodeLabelOptions((prev) => ({ ...prev, showFlags: e.target.checked }))
+                  }
+                >
+                  Ticket attributes
+                </Toggle>
+              </div>
             )}
-            <Toggle
-              size={ToggleSize.Size14}
-              checked={
-                !nodeLabelOptions.showType &&
-                !nodeLabelOptions.showSummary &&
-                !nodeLabelOptions.showFlags
-              }
-              onChange={(e: any) =>
-                setNodeLabelOptions((prev) => ({
-                  ...prev,
-                  showType: !e.target.checked,
-                  showSummary: !e.target.checked,
-                  showFlags: !e.target.checked,
-                }))
-              }
-            >
-              Only ticket ID
-            </Toggle>
-            <Toggle
-              size={ToggleSize.Size14}
-              checked={nodeLabelOptions.showType}
-              onChange={(e: any) =>
-                setNodeLabelOptions((prev) => ({ ...prev, showType: e.target.checked }))
-              }
-            >
-              Ticket types
-            </Toggle>
-            <Toggle
-              size={ToggleSize.Size14}
-              checked={nodeLabelOptions.showSummary}
-              onChange={(e: any) =>
-                setNodeLabelOptions((prev) => ({ ...prev, showSummary: e.target.checked }))
-              }
-            >
-              Ticket summary
-            </Toggle>
-            <Toggle
-              size={ToggleSize.Size14}
-              checked={nodeLabelOptions.showFlags}
-              onChange={(e: any) =>
-                setNodeLabelOptions((prev) => ({ ...prev, showFlags: e.target.checked }))
-              }
-            >
-              Ticket attributes
-            </Toggle>
+            <div style={{ marginLeft: "auto" }}>
+              <Tooltip
+                title={graphNodeControlsOpen ? undefined : "Expand graph controls"}
+                theme={Theme.LIGHT}
+              >
+                <Button
+                  inline
+                  onClick={() => setGraphNodeControlsOpen((prev) => !prev)}
+                  iconRight={graphNodeControlsOpen ? DoubleChevronRight : DoubleChevronLeft}
+                  ghost
+                >
+                  {graphNodeControlsOpen && "Collapse"}
+                </Button>
+              </Tooltip>
+            </div>
           </div>
         </DepGraph>
       )}
