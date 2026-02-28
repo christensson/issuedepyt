@@ -18,6 +18,7 @@ interface OptionsDropdownMenuProps {
   showNodeLabelFlags: boolean;
   showNodeLabelSummary: boolean;
   showNodeLabelType: boolean;
+  maxHeight?: number;
   setMaxDepth: (value: number) => void;
   setMaxNodeWidth: (value: number) => void;
   setUseHierarchicalLayout: (value: boolean) => void;
@@ -40,6 +41,7 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
   showNodeLabelFlags,
   showNodeLabelSummary,
   showNodeLabelType,
+  maxHeight,
   setMaxDepth,
   setMaxNodeWidth,
   setUseHierarchicalLayout,
@@ -61,6 +63,7 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
       onHide={() => setOpen(false)}
       menuProps={{
         closeOnSelect: false,
+        maxHeight: maxHeight,
       }}
       anchor={<Button inline icon={popupIcon} />}
       data={[

@@ -1,19 +1,20 @@
-import React, { useRef, useState } from "react";
+import CloseIcon from "@jetbrains/icons/close";
+import SearchIcon from "@jetbrains/icons/search";
+import Button from "@jetbrains/ring-ui-built/components/button/button";
 import DropdownMenu from "@jetbrains/ring-ui-built/components/dropdown-menu/dropdown-menu";
 import Input from "@jetbrains/ring-ui-built/components/input/input";
-import Button from "@jetbrains/ring-ui-built/components/button/button";
-import SearchIcon from "@jetbrains/icons/search";
-import CloseIcon from "@jetbrains/icons/close";
-import NestedMenuItem from "./nested-menu-item";
-import type { IssueInfo } from "./issue-types";
+import React, { useRef, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
 import type { Settings } from "../../../@types/settings";
+import type { IssueInfo } from "./issue-types";
+import NestedMenuItem from "./nested-menu-item";
 
 interface SearchDropdownMenuProps {
   fieldInfo: FieldInfo;
   issueData: { [key: string]: IssueInfo };
   settings: Settings;
   setHighlightedNodes: (value: Array<string> | null) => void;
+  maxHeight?: number;
 }
 
 const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
@@ -21,6 +22,7 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
   issueData,
   settings,
   setHighlightedNodes,
+  maxHeight,
 }) => {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -28,7 +30,7 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
 
   const findNodes = (
     filterFunc: (issue: IssueInfo) => boolean,
-    issueData: { [key: string]: IssueInfo }
+    issueData: { [key: string]: IssueInfo },
   ) => {
     return Object.values(issueData)
       .filter(filterFunc)
@@ -59,7 +61,7 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
             findNodes((x: IssueInfo) => {
               const content = `${x.idReadable} ${x.summary}`;
               return content.toLowerCase().includes(e.target.value.toLowerCase());
-            }, issueData)
+            }, issueData),
           )
         }
       />
@@ -84,7 +86,7 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
               inline
               onClick={(e: any) =>
                 setHighlightedNodes(
-                  findNodes((x: IssueInfo) => x[fieldName] === valueName, issueData)
+                  findNodes((x: IssueInfo) => x[fieldName] === valueName, issueData),
                 )
               }
             >
@@ -97,7 +99,7 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
         rgItemType: DropdownMenu.ListProps.Type.CUSTOM,
         template: (
           <button className="nested-menu-button" onClick={(e) => e.stopPropagation()}>
-            <NestedMenuItem title={field.name} data={submenuItems} />
+            <NestedMenuItem title={field.name} maxHeight={maxHeight} data={submenuItems} />
           </button>
         ),
       });
@@ -123,8 +125,8 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
                   (x: IssueInfo) =>
                     x?.sprints != undefined &&
                     x.sprints.filter((s) => s.name === sprint).length > 0,
-                  issueData
-                )
+                  issueData,
+                ),
               )
             }
           >
@@ -137,7 +139,7 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
       rgItemType: DropdownMenu.ListProps.Type.CUSTOM,
       template: (
         <button className="nested-menu-button" onClick={(e) => e.stopPropagation()}>
-          <NestedMenuItem title="Sprints" data={submenuItems} />
+          <NestedMenuItem title="Sprints" maxHeight={maxHeight} data={submenuItems} />
         </button>
       ),
     });
@@ -182,7 +184,7 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
           {label}
         </Button>
       ),
-    }))
+    })),
   );
 
   return (
@@ -191,6 +193,7 @@ const SearchDropdownMenu: React.FunctionComponent<SearchDropdownMenuProps> = ({
       onHide={() => setOpen(false)}
       menuProps={{
         closeOnSelect: false,
+        maxHeight: maxHeight,
       }}
       anchor={<Button inline icon={popupIcon} />}
       data={items}

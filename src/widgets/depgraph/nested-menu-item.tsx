@@ -1,17 +1,18 @@
-import React from "react";
+import ChevronRightIcon from "@jetbrains/icons/chevron-right";
 import DropdownMenu, {
   DropdownMenuProps,
 } from "@jetbrains/ring-ui-built/components/dropdown-menu/dropdown-menu";
-import { Directions } from "@jetbrains/ring-ui-built/components/popup/popup.consts";
-import Icon from "@jetbrains/ring-ui-built/components/icon/icon";
 import Group from "@jetbrains/ring-ui-built/components/group/group";
+import Icon from "@jetbrains/ring-ui-built/components/icon/icon";
 import { ListDataItem } from "@jetbrains/ring-ui-built/components/list/consts";
-import ChevronRightIcon from "@jetbrains/icons/chevron-right";
+import { Directions } from "@jetbrains/ring-ui-built/components/popup/popup.consts";
+import React from "react";
 
 export interface NestedMenuProps {
   title: string;
   data?: ListDataItem[];
   children?: React.ReactNode;
+  maxHeight?: number;
 }
 
 export const NestedMenuItem = (props: NestedMenuProps) => {
@@ -48,6 +49,7 @@ export const NestedMenuItem = (props: NestedMenuProps) => {
     ["data-test"]: "nested-menu",
     hidden: false,
     activateFirstItem: false,
+    maxHeight: props?.maxHeight,
   };
   if (props.data) {
     // dropdown menu has automatic support for aria-navigation

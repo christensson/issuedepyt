@@ -1,17 +1,18 @@
-import React, { useRef, useState } from "react";
-import DropdownMenu from "@jetbrains/ring-ui-built/components/dropdown-menu/dropdown-menu";
+import CloseIcon from "@jetbrains/icons/close";
+import FilterIcon from "@jetbrains/icons/filter";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
 import Checkbox from "@jetbrains/ring-ui-built/components/checkbox/checkbox";
-import FilterIcon from "@jetbrains/icons/filter";
-import CloseIcon from "@jetbrains/icons/close";
-import NestedMenuItem from "./nested-menu-item";
+import DropdownMenu from "@jetbrains/ring-ui-built/components/dropdown-menu/dropdown-menu";
+import React, { useRef, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
 import type { FilterState, FilterStateKey } from "../../../@types/filter-state";
+import NestedMenuItem from "./nested-menu-item";
 
 interface FilterDropdownMenuProps {
   fieldInfo: FieldInfo;
   filterState: FilterState;
   setFilterState: (value: FilterState) => void;
+  maxHeight?: number;
 }
 
 export const createFilterState = (fieldInfo: FieldInfo): FilterState => {
@@ -37,6 +38,7 @@ const FilterDropdownMenu: React.FunctionComponent<FilterDropdownMenuProps> = ({
   fieldInfo,
   filterState,
   setFilterState,
+  maxHeight,
 }) => {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -77,7 +79,7 @@ const FilterDropdownMenu: React.FunctionComponent<FilterDropdownMenuProps> = ({
         rgItemType: DropdownMenu.ListProps.Type.CUSTOM,
         template: (
           <button className="nested-menu-button" onClick={(e) => e.stopPropagation()}>
-            <NestedMenuItem title={field.name} data={submenuItems} />
+            <NestedMenuItem title={field.name} maxHeight={maxHeight} data={submenuItems} />
           </button>
         ),
       });
@@ -122,6 +124,7 @@ const FilterDropdownMenu: React.FunctionComponent<FilterDropdownMenuProps> = ({
       onHide={() => setOpen(false)}
       menuProps={{
         closeOnSelect: false,
+        maxHeight: maxHeight,
       }}
       anchor={<Button inline icon={popupIcon} />}
       data={items}

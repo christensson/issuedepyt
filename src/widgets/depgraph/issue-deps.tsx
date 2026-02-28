@@ -51,6 +51,8 @@ const DEFAULT_MAX_NODE_WIDTH = 200;
 const DEFAULT_USE_HIERARCHICAL_LAYOUT = false;
 const DEFAULT_USE_ALTERNATE_TREE_LAYOUT = false;
 
+const GRAPH_HEIGHT_MARGIN = 40;
+
 type GRAPH_SIZE_ITEM = {
   height: number;
   limits?: {
@@ -416,11 +418,13 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               issueData={issueData}
               settings={settings}
               setHighlightedNodes={setHighlightedNodes}
+              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
             />
             <FilterDropdownMenu
               fieldInfo={fieldInfo}
               filterState={filterState}
               setFilterState={setFilterState}
+              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
             />
             {!isSinglePageApp && (
               <Tooltip title="Open graph in full-screen page..." theme={Theme.LIGHT}>
@@ -439,6 +443,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               showNodeLabelType={nodeLabelOptions.showType}
               setMaxDepth={setMaxDepth}
               setMaxNodeWidth={setMaxNodeWidth}
+              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
               setUseHierarchicalLayout={(hierarchical: boolean) =>
                 setLayoutOptions((prev) => ({ ...prev, hierarchical }))
               }
