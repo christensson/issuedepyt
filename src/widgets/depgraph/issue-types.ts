@@ -51,10 +51,10 @@ export interface IssueInfo {
   estimation: IssuePeriod | null;
   resolved: boolean;
   depth: number; // Root node has depth 0.
-  upstreamLinks: Array<IssueLink>;
-  downstreamLinks: Array<IssueLink>;
+  upstreamLinks: Array<IssueLink>; // YT-upstream links (targets appear visually below).
+  downstreamLinks: Array<IssueLink>; // YT-downstream links (targets appear visually above).
   linksKnown: boolean;
-  showUpstream: boolean;
-  showDownstream: boolean;
+  showUpstream: boolean; // Show nodes that are visually above (reached via downstreamLinks).
+  showDownstream: boolean; // Show nodes that are visually below (reached via upstreamLinks).
   extraFields: Array<CustomField>;
 }
