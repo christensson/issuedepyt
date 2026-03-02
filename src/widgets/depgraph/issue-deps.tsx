@@ -170,7 +170,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     hierarchical: DEFAULT_USE_HIERARCHICAL_LAYOUT,
     hierarchicalDirection: "TB",
     alternateTreeLayout: DEFAULT_USE_ALTERNATE_TREE_LAYOUT,
-    horizontalEdgeLabels: true,
+    horizontalEdgeLabels: false,
   });
   const [fieldInfo, setFieldInfo] = useState<FieldInfo>({});
   const [issueData, setIssueData] = useState<{ [key: string]: IssueInfo }>({});
