@@ -162,6 +162,42 @@ const getExtraFields = (
   return customFields;
 };
 
+const buildIssueInfo = (
+  rawIssue: any,
+  settings: Settings,
+  depth: number,
+): IssueInfo => {
+  return {
+    id: rawIssue.id,
+    idReadable: rawIssue.isDraft ? `Draft ${rawIssue.id}` : rawIssue.idReadable,
+    isDraft: rawIssue.isDraft,
+    summary: rawIssue.summary,
+    ...(settings?.typeField && {
+      type: getCustomFieldValue(settings.typeField, rawIssue.customFields),
+    }),
+    ...(settings?.stateField && {
+      state: getCustomFieldValue(settings.stateField, rawIssue.customFields),
+    }),
+    ...(settings?.sprintsField && {
+      sprints: getCustomFieldValue(settings.sprintsField, rawIssue.customFields),
+    }),
+    ...(settings?.assigneeField && {
+      assignee: getCustomFieldValue(settings.assigneeField, rawIssue.customFields),
+    }),
+    startDate: getCustomFieldValue(settings?.startDateField, rawIssue.customFields),
+    dueDate: getCustomFieldValue(settings?.dueDateField, rawIssue.customFields),
+    estimation: getCustomFieldValue(settings?.estimationField, rawIssue.customFields),
+    resolved: rawIssue.resolved,
+    depth,
+    upstreamLinks: [],
+    downstreamLinks: [],
+    linksKnown: false,
+    showUpstreamNodes: true,
+    showDownstreamNodes: false,
+    extraFields: getExtraFields(settings?.extraCustomFields, rawIssue.customFields),
+  };
+};
+
 const normalizeDirection = (value: string | undefined): string => {
   return (value || "").trim().toUpperCase();
 };
@@ -216,7 +252,7 @@ async function fetchDepsRecursive(
   settings: Settings,
   issues: { [key: string]: IssueInfo }
 ): Promise<any> {
-  if (depth == maxDepth + 1) {
+  if (depth > maxDepth) {
     return;
   }
 
@@ -253,27 +289,8 @@ async function fetchDepsRecursive(
 
   const linksFlat = linksToFollow.flatMap((link: any) =>
     link.issues.map((issue: any) => ({
-      id: issue.id,
-      idReadable: issue.isDraft ? `Draft ${issue.id}` : issue.idReadable,
-      isDraft: issue.isDraft,
+      issue,
       sourceId: issueID,
-      summary: issue.summary,
-      ...(settings?.typeField && {
-        type: getCustomFieldValue(settings.typeField, issue.customFields),
-      }),
-      ...(settings?.stateField && {
-        state: getCustomFieldValue(settings.stateField, issue.customFields),
-      }),
-      ...(settings?.sprintsField && {
-        sprints: getCustomFieldValue(settings.sprintsField, issue.customFields),
-      }),
-      ...(settings?.assigneeField && {
-        assignee: getCustomFieldValue(settings.assigneeField, issue.customFields),
-      }),
-      startDate: getCustomFieldValue(settings?.startDateField, issue.customFields),
-      dueDate: getCustomFieldValue(settings?.dueDateField, issue.customFields),
-      estimation: getCustomFieldValue(settings?.estimationField, issue.customFields),
-      resolved: issue.resolved,
       direction: link.direction,
       linkType: link.linkType.name,
       targetToSource: link.linkType.targetToSource,
@@ -281,21 +298,20 @@ async function fetchDepsRecursive(
       relation:
         link.direction == "INWARD" ? link.linkType.targetToSource : link.linkType.sourceToTarget,
       depth: depth,
-      extraFields: getExtraFields(settings?.extraCustomFields, issue.customFields),
     }))
   );
   for (const link of linksFlat) {
     const relationKind = getRelationKind(relations, link.direction, link.linkType);
     const linksList = relationKind === "upstream" ? issue.upstreamLinks : issue.downstreamLinks;
     const linkExist = linksList.some(
-      (x) => link.id === x.targetId && link.direction === x.direction && link.linkType === x.type
+      (x) => link.issue.id === x.targetId && link.direction === x.direction && link.linkType === x.type
     );
     if (linkExist) {
       continue;
     }
     linksList.push({
-      targetId: link.id,
-      targetIdReadable: link.idReadable,
+      targetId: link.issue.id,
+      targetIdReadable: link.issue.isDraft ? `Draft ${link.issue.id}` : link.issue.idReadable,
       type: link.linkType,
       direction: link.direction,
       targetToSource: link.targetToSource,
@@ -306,28 +322,8 @@ async function fetchDepsRecursive(
   for (const link of linksFlat) {
     const relationKind = getRelationKind(relations, link.direction, link.linkType);
 
-    if (!(link.id in issues)) {
-      issues[link.id] = {
-        id: link.id,
-        idReadable: link.isDraft ? `Draft ${link.id}` : link.idReadable,
-        isDraft: link.isDraft,
-        summary: link.summary,
-        type: link.type,
-        state: link.state,
-        sprints: link.sprints,
-        assignee: link.assignee,
-        startDate: link.startDate,
-        dueDate: link.dueDate,
-        estimation: link.estimation,
-        resolved: link.resolved,
-        depth: link.depth,
-        upstreamLinks: [],
-        downstreamLinks: [],
-        linksKnown: false,
-        showUpstreamNodes: true,
-        showDownstreamNodes: false,
-        extraFields: link.extraFields,
-      };
+    if (!(link.issue.id in issues)) {
+      issues[link.issue.id] = buildIssueInfo(link.issue, settings, link.depth);
     }
 
     // Invert link and inject that in target issue if not already present.
@@ -341,7 +337,7 @@ async function fetchDepsRecursive(
       sourceToTarget: link.sourceToTarget,
     };
 
-    const targetIssue = issues[link.id];
+    const targetIssue = issues[link.issue.id];
     const mirroredLinksList =
       relationKind === "upstream" ? targetIssue.downstreamLinks : targetIssue.upstreamLinks;
     const mirroredLinkExist = mirroredLinksList.some(
@@ -382,7 +378,6 @@ async function fetchDepsRecursive(
     fetchDepsRecursive(host, id, depth + 1, maxDepth, relations, followDirs, settings, issues)
   );
   await Promise.all(promises);
-  return;
 }
 
 export async function fetchIssueAndInfo(
@@ -432,35 +427,7 @@ export async function fetchIssueAndInfo(
     });
   }
 
-  const issue: IssueInfo = {
-    id: issueInfo.id,
-    idReadable: issueInfo.isDraft ? `Draft ${issueInfo.id}` : issueInfo.idReadable,
-    isDraft: issueInfo.isDraft,
-    summary: issueInfo.summary,
-    ...(settings?.typeField && {
-      type: getCustomFieldValue(settings.typeField, issueInfo.customFields),
-    }),
-    ...(settings?.stateField && {
-      state: getCustomFieldValue(settings.stateField, issueInfo.customFields),
-    }),
-    ...(settings?.sprintsField && {
-      sprints: getCustomFieldValue(settings.sprintsField, issueInfo.customFields),
-    }),
-    ...(settings?.assigneeField && {
-      assignee: getCustomFieldValue(settings.assigneeField, issueInfo.customFields),
-    }),
-    startDate: getCustomFieldValue(settings?.startDateField, issueInfo.customFields),
-    dueDate: getCustomFieldValue(settings?.dueDateField, issueInfo.customFields),
-    estimation: getCustomFieldValue(settings?.estimationField, issueInfo.customFields),
-    resolved: issueInfo.resolved,
-    depth: 0,
-    upstreamLinks: [],
-    downstreamLinks: [],
-    linksKnown: false,
-    showDownstreamNodes: false,
-    showUpstreamNodes: true,
-    extraFields: getExtraFields(settings?.extraCustomFields, issueInfo.customFields),
-  };
+  const issue: IssueInfo = buildIssueInfo(issueInfo, settings, 0);
 
   return { issue, fieldInfo };
 }

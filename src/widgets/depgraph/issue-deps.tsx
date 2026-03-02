@@ -28,7 +28,7 @@ import DepGraph, {
 } from "./dep-graph";
 import DepTimeline from "./dep-timeline";
 import exportData from "./export";
-import type { FollowDirection, FollowDirections } from "./fetch-deps";
+import type { FollowDirections } from "./fetch-deps";
 import { fetchDeps, fetchDepsAndExtend, fetchIssueAndInfo } from "./fetch-deps";
 import FilterDropdownMenu, { createFilterState } from "./filter-dropdown-menu";
 import IssueInfoCard from "./issue-info-card";
@@ -248,7 +248,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   ]);
 
   const loadIssueDeps = useCallback(
-    async (issueId: string, direction: FollowDirection | null = null) => {
+    async (issueId: string) => {
       console.log(`Fetching deps for ${issueId}...`);
       setLoading(true);
       const followDirs: FollowDirections = getFollowDirections(followUpstream, followDownstream);
