@@ -472,7 +472,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               "curve-style": "bezier",
               label: "data(label)",
               "font-size": "10px",
-              "text-rotation": "autorotate",
+              "text-rotation": 0,
               "text-margin-y": -10,
             },
           },
