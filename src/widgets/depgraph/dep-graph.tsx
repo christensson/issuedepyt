@@ -40,6 +40,7 @@ export type LayoutOptions = {
   hierarchical: boolean;
   alternateTreeLayout: boolean;
   hierarchicalDirection: HierarchicalDirection;
+  horizontalEdgeLabels: boolean;
 };
 
 interface DepGraphProps extends React.PropsWithChildren {
@@ -471,9 +472,12 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               "source-arrow-color": Color.LinkColor,
               "curve-style": "bezier",
               label: "data(label)",
-              "font-size": "10px",
-              "text-rotation": 0,
-              "text-margin-y": -10,
+              "font-size": "11px",
+              "text-rotation": layoutOptions.horizontalEdgeLabels ? 0 : "autorotate",
+              "text-margin-y": 0,
+              "text-background-color": "#ffffff",
+              "text-background-opacity": 0.8,
+              "text-background-padding": "2px",
             },
           },
           {
@@ -581,6 +585,14 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         padding: shortLabel ? "5px" : "10px",
       });
       cy.style().selector("node").style(nodeStyle).update();
+
+      // Update edge label rotation.
+      cy.style()
+        .selector("edge")
+        .style({
+          "text-rotation": layoutOptions.horizontalEdgeLabels ? 0 : "autorotate",
+        })
+        .update();
 
       // Run layout.
       const cyLayoutOpts = getLayoutOptions(layoutOptions);

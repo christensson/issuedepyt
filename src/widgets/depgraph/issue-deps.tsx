@@ -170,6 +170,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     hierarchical: DEFAULT_USE_HIERARCHICAL_LAYOUT,
     hierarchicalDirection: "TB",
     alternateTreeLayout: DEFAULT_USE_ALTERNATE_TREE_LAYOUT,
+    horizontalEdgeLabels: true,
   });
   const [fieldInfo, setFieldInfo] = useState<FieldInfo>({});
   const [issueData, setIssueData] = useState<{ [key: string]: IssueInfo }>({});
@@ -451,6 +452,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               maxNodeWidth={maxNodeWidth}
               useHierarchicalLayout={layoutOptions.hierarchical}
               useAlternateTreeLayout={layoutOptions.alternateTreeLayout}
+              horizontalEdgeLabels={layoutOptions.horizontalEdgeLabels}
               followUpstream={followUpstream}
               followDownstream={followDownstream}
               showNodeLabelFlags={nodeLabelOptions.showFlags}
@@ -464,6 +466,9 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               }
               setUseAlternateTreeLayout={(alternateTreeLayout: boolean) =>
                 setLayoutOptions((prev) => ({ ...prev, alternateTreeLayout }))
+              }
+              setHorizontalEdgeLabels={(horizontalEdgeLabels: boolean) =>
+                setLayoutOptions((prev) => ({ ...prev, horizontalEdgeLabels }))
               }
               setFollowUpstream={setFollowUpstream}
               setFollowDownstream={setFollowDownstream}
@@ -531,6 +536,18 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                     Alternate tree layout
                   </Toggle>
                 )}
+                <Toggle
+                  size={ToggleSize.Size14}
+                  checked={layoutOptions.horizontalEdgeLabels}
+                  onChange={(e: any) =>
+                    setLayoutOptions((prev) => ({
+                      ...prev,
+                      horizontalEdgeLabels: e.target.checked,
+                    }))
+                  }
+                >
+                  Horizontal edge labels
+                </Toggle>
                 {layoutOptions.hierarchical && (
                   <Select
                     data={treeDirectionSelectItems}
