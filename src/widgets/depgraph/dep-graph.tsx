@@ -28,6 +28,60 @@ import type { IssueInfo, IssueLink } from "./issue-types";
 
 const GRAPH_PADDING = 20;
 
+const MIN_NODE_WIDTH = 40;
+const MAX_NODE_WIDTH = 400;
+const MIN_NODE_HEIGHT = 20;
+const MAX_NODE_HEIGHT = 200;
+
+const MIN_ZOOM_AFTER_FIT = 0.7;
+const MAX_ZOOM_AFTER_FIT = 2.0;
+
+/**
+ * Fit the graph into the viewport, clamping zoom to [MIN, MAX].
+ * Returns the extra vertical pixels needed, or 0 if the graph fits
+ * or vertical growth wouldn't help.
+ */
+const smartFitGraph = (cy: Core): number => {
+  cy.fit(undefined, GRAPH_PADDING);
+  const zoom = cy.zoom();
+  if (zoom > MAX_ZOOM_AFTER_FIT) {
+    cy.zoom(MAX_ZOOM_AFTER_FIT);
+    cy.center();
+    return 0;
+  } else if (zoom < MIN_ZOOM_AFTER_FIT) {
+    cy.zoom(MIN_ZOOM_AFTER_FIT);
+    cy.center();
+
+    // Check whether vertical growth would actually help by comparing
+    // the graph bounding box to the container dimensions.
+    // If the graph is much wider than it is tall relative to the
+    // container, adding height won't improve the fit.
+    const bb = cy.elements().boundingBox();
+    const containerWidth = cy.width();
+    const containerHeight = cy.height();
+    if (bb.w === 0 || bb.h === 0 || containerWidth === 0 || containerHeight === 0) {
+      return containerHeight;
+    }
+    const graphAspect = bb.w / bb.h;
+    const containerAspect = containerWidth / containerHeight;
+    // When the graph is much wider than the container (width is the
+    // primary bottleneck), adding height won't improve the zoom level.
+    // However, the container should still be tall enough to render the
+    // graph's vertical extent comfortably so that the user has a usable
+    // viewport (especially when starting from the small initial height).
+    if (graphAspect > containerAspect * 1.5) {
+      const targetHeight = (bb.h + 2 * GRAPH_PADDING) * MIN_ZOOM_AFTER_FIT;
+      const extraHeight = Math.ceil(targetHeight - containerHeight);
+      return Math.max(0, extraHeight);
+    }
+    // Calculate how much taller the container needs to be.
+    const scaleFactor = MIN_ZOOM_AFTER_FIT / zoom;
+    const extraHeight = Math.ceil(containerHeight * (scaleFactor - 1));
+    return Math.max(0, extraHeight);
+  }
+  return 0;
+};
+
 // Register Cytoscape extensions
 cytoscape.use(dagre);
 cytoscape.use(klay);
@@ -43,6 +97,7 @@ interface DepGraphProps extends React.PropsWithChildren {
   height: number;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
+  onRequestGrow?: (neededHeight: number) => void;
 }
 
 const FONT_FAMILY = "system-ui, Arial, sans-serif";
@@ -279,10 +334,12 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   height,
   setSelectedNode,
   onOpenNode,
+  onRequestGrow,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const pendingFit = useRef(false);
 
   const updateSelectedNodes = (selectedId: string | null, highlightedIds: Array<string> | null) => {
     if (!cyRef.current) {
@@ -306,15 +363,15 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   };
 
-  const calcLabelDimensions = (label: string, node: any): { "width": number; "height": number } => {
+  const calcLabelDimensions = (label: string, node: any): { width: number; height: number } => {
     if (label.length === 0) {
-      return { "width": 10, "height": 10 }; // Minimum width for nodes without labels.
+      return { width: 10, height: 10 }; // Minimum width for nodes without labels.
     }
     // Reference implementation is calculateLabelDimensions.
     // See https://github.com/cytoscape/cytoscape.js/blob/unstable/src/extensions/renderer/base/coord-ele-math/labels.mjs
     const ctx = document.createElement("canvas").getContext("2d");
     if (ctx == null) {
-      return { "width": 20, "height": 20 }; // Minimum width for nodes without labels.
+      return { width: 20, height: 20 }; // Minimum width for nodes without labels.
     }
     const fStyle = node.pstyle("font-style").strValue;
     const fontSize = node.pstyle("font-size").pfValue;
@@ -341,13 +398,13 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   const calcNodeWidth = (node: any) => {
     const label = node.data("label") || "";
     const dimensions = calcLabelDimensions(label, node);
-    return dimensions.width;
+    return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, dimensions.width));
   };
 
   const calcNodeHeight = (node: any) => {
     const label = node.data("label") || "";
     const dimensions = calcLabelDimensions(label, node);
-    return dimensions.height;
+    return Math.min(MAX_NODE_HEIGHT, Math.max(MIN_NODE_HEIGHT, dimensions.height));
   };
 
   // Initialize Cytoscape.
@@ -375,8 +432,8 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               "border-width": 2,
               "border-color": Color.SecondaryColor,
               padding: shortLabel ? "5px" : "10px",
-              "width": calcNodeWidth,
-              "height": calcNodeHeight,
+              width: calcNodeWidth,
+              height: calcNodeHeight,
               "text-max-width": layoutOpts.maxNodeWidth ? `${layoutOpts.maxNodeWidth}px` : "200px",
               shape: "round-rectangle",
             } as Css.Node,
@@ -460,9 +517,31 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   }, []);
 
-  const getLayoutOptions = (layoutOpts: LayoutOptions) => {
-    if (layoutOpts.hierarchical) {
-      if (layoutOpts.alternateTreeLayout) {
+  // Keep Cytoscape's internal size tracking in sync with the container.
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      if (cyRef.current) {
+        cyRef.current.resize();
+      }
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  // After a grow request changes the container height, re-fit the graph.
+  // This runs deterministically after React commits the DOM change, so
+  // cy.resize() + smartFitGraph always see the correct container size.
+  useEffect(() => {
+    if (pendingFit.current && cyRef.current) {
+      pendingFit.current = false;
+      cyRef.current.resize();
+      smartFitGraph(cyRef.current);
+    }
+  }, [height]);
+
+  const getLayoutOptions = (layoutOptions: LayoutOptions) => {
+    if (layoutOptions.hierarchical) {
+      if (layoutOptions.alternateTreeLayout) {
         const toDirection = {
           TB: "DOWN",
           BT: "UP",
@@ -472,7 +551,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         return {
           name: "klay",
           klay: {
-            direction: toDirection[layoutOpts.hierarchicalDirection],
+            direction: toDirection[layoutOptions.hierarchicalDirection as keyof typeof toDirection],
           },
           nodeDimensionsIncludeLabels: true,
           animate: false,
@@ -482,7 +561,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       }
       return {
         name: "dagre",
-        rankDir: layoutOpts.hierarchicalDirection,
+        rankDir: layoutOptions.hierarchicalDirection,
         nodeDimensionsIncludeLabels: true,
         ranker: "network-simplex",
         animate: false,
@@ -513,8 +592,8 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       if (layoutOpts.maxNodeWidth) {
         Object.assign(nodeStyle, {
           "text-max-width": `${layoutOpts.maxNodeWidth}px`,
-          "width": calcNodeWidth,
-          "height": calcNodeHeight,
+          width: calcNodeWidth,
+          height: calcNodeHeight,
         });
       }
       const shortLabel = !nodeLabelOpts.showSummary && !nodeLabelOpts.showFlags;
@@ -536,7 +615,11 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const layout = cy.layout(cyLayoutOpts);
       layout.removeListener("layoutstop");
       layout.on("layoutstop", () => {
-        cy.fit(undefined, GRAPH_PADDING);
+        const neededHeight = smartFitGraph(cy);
+        if (neededHeight > 0) {
+          pendingFit.current = true;
+          onRequestGrow?.(neededHeight);
+        }
       });
       layout.run();
     }
@@ -581,7 +664,11 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cyLayoutOpts = getLayoutOptions(layoutOpts);
       const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
-        cy.fit(undefined, GRAPH_PADDING);
+        const neededHeight = smartFitGraph(cy);
+        if (neededHeight > 0) {
+          pendingFit.current = true;
+          onRequestGrow?.(neededHeight);
+        }
       });
       layout.run();
 
@@ -626,7 +713,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   const fitGraph = () => {
     if (cyRef.current) {
       const cy = cyRef.current;
-      cy.fit(undefined, GRAPH_PADDING);
+      smartFitGraph(cy);
     }
   };
 
