@@ -13,7 +13,7 @@ import type { SelectItem } from "@jetbrains/ring-ui-built/components/select/sele
 import Select from "@jetbrains/ring-ui-built/components/select/select";
 import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
 import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
 import type { FollowSettings } from "../../../@types/follow-settings";
@@ -60,39 +60,11 @@ const DEFAULT_MAX_DEPTH = 6;
 const GRAPH_HEIGHT_MARGIN = 40;
 const GRAPH_CONTROLS_HEIGHT_MIN_VALUE = 200;
 
-type GRAPH_SIZE_ITEM = {
-  height: number;
-  limits?: {
-    maxDepth: number;
-    maxCount: number;
-  };
-};
-const GRAPH_SIZE: Array<GRAPH_SIZE_ITEM> = [
-  {
-    height: 130,
-    limits: {
-      maxDepth: 0,
-      maxCount: 2,
-    },
-  },
-  {
-    height: 260,
-    limits: {
-      maxDepth: 1,
-      maxCount: 10,
-    },
-  },
-  {
-    height: 390,
-    limits: {
-      maxDepth: 3,
-      maxCount: 20,
-    },
-  },
-  {
-    height: 520,
-  },
-];
+// Must match --estimated-window-overhead in app.css.
+const GRAPH_WINDOW_OVERHEAD = 316;
+const GRAPH_INITIAL_HEIGHT = 130;
+const GRAPH_HEIGHT_INCREMENT = 130;
+const GRAPH_HEIGHT_MAX = 1400;
 
 const getNumIssues = (issueData: { [key: string]: IssueInfo }): number => {
   return Object.keys(issueData).length;
@@ -102,16 +74,6 @@ const getMaxDepth = (issueData: { [key: string]: IssueInfo }): number => {
   return Object.values(issueData)
     .map((x) => x.depth)
     .reduce((acc, val) => Math.max(acc, val), 0);
-};
-
-const calcGraphSizeFromIssues = (issueData: { [key: string]: IssueInfo }): number => {
-  const count = getNumIssues(issueData);
-  const maxDepth = getMaxDepth(issueData);
-  const sizeEntry = GRAPH_SIZE.find((value) => {
-    const limits = value?.limits;
-    return limits === undefined || (maxDepth <= limits.maxDepth && count <= limits.maxCount);
-  });
-  return sizeEntry ? sizeEntry.height : 400;
 };
 
 const parseRelationList = (relations: string | undefined): Array<Relation> => {
@@ -160,7 +122,9 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     showOrphans: false,
     showWhenLinksUnknown: true,
   });
-  const [graphNodeControlsOpen, setGraphNodeControlsOpen] = useState<boolean>(true);
+  const [graphNodeControlsOpen, setGraphNodeControlsOpen] = useState<boolean>(false);
+  const initialLoadDone = useRef<boolean>(false);
+  const showMenuOnFirstGrow = useRef<boolean>(true);
 
   // Auto-collapse the floating menu when the graph is shrunk to its smallest size.
   useEffect(() => {
@@ -175,8 +139,33 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   };
 
   const activateGraphHeight = (height: number) => {
+    if (showMenuOnFirstGrow.current && height > graphHeight) {
+      showMenuOnFirstGrow.current = false;
+      setGraphNodeControlsOpen(true);
+    }
     setGraphHeight(height);
+    const actualHeight = height + GRAPH_WINDOW_OVERHEAD;
+    document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
   };
+
+  const growGraphHeight = useCallback((extraHeight: number) => {
+    // Round up to whole increments.
+    const steps = Math.ceil(extraHeight / GRAPH_HEIGHT_INCREMENT);
+    const growth = steps * GRAPH_HEIGHT_INCREMENT;
+    setGraphHeight((prev) => {
+      const newHeight = Math.min(prev + growth, GRAPH_HEIGHT_MAX);
+      if (newHeight > prev) {
+        const actualHeight = newHeight + GRAPH_WINDOW_OVERHEAD;
+        document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
+        if (showMenuOnFirstGrow.current) {
+          showMenuOnFirstGrow.current = false;
+          setGraphNodeControlsOpen(true);
+        }
+        return newHeight;
+      }
+      return prev;
+    });
+  }, []);
 
   const getFollowDirections = (followSettings: FollowSettings): FollowDirections => {
     const followDirs: FollowDirections = [];
@@ -209,10 +198,10 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     const issues = await fetchDeps(host, issueInfo, maxDepth, relations, followDirs, settings);
     setFilterState(createFilterState(fieldInfoData));
     setFieldInfo(fieldInfoData);
-    if (useDynamicGraphHeight) {
-      const height = calcGraphSizeFromIssues(issues);
-      setGraphHeight(height);
+    if (useDynamicGraphHeight && !initialLoadDone.current) {
+      activateGraphHeight(GRAPH_INITIAL_HEIGHT);
     }
+    initialLoadDone.current = true;
     console.log("Fetched issues from root:", issues);
     setIssueData(issues);
     // Remove highlight.
@@ -515,6 +504,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           height={graphHeight}
           setSelectedNode={selectNode}
           onOpenNode={openNode}
+          onRequestGrow={!isSinglePageApp ? growGraphHeight : undefined}
         >
           <div className={"dep-graph-node-controls"}>
             {graphNodeControlsOpen && (
@@ -646,20 +636,18 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 title={
                   graphNodeControlsOpen
                     ? undefined
-                    : !graphNodeControlsOpen &&
-                        graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN
-                      ? "Increase graph height to expand controls"
-                      : "Expand graph controls"
+                    : "Expand graph controls"
                 }
                 theme={Theme.LIGHT}
               >
                 <Button
                   inline
-                  disabled={
-                    !graphNodeControlsOpen &&
-                    graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN
-                  }
-                  onClick={() => setGraphNodeControlsOpen((prev) => !prev)}
+                  onClick={() => {
+                    if (!graphNodeControlsOpen && graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN) {
+                      activateGraphHeight(Math.min(graphHeight + GRAPH_HEIGHT_INCREMENT, GRAPH_HEIGHT_MAX));
+                    }
+                    setGraphNodeControlsOpen((prev) => !prev);
+                  }}
                   iconRight={graphNodeControlsOpen ? DoubleChevronRight : DoubleChevronLeft}
                   ghost
                 >
@@ -682,6 +670,15 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       )}
       {selectedNode !== null && isSelectedNodeAnIssue(selectedNode, issueData) && (
         <IssueInfoCard issue={issueData[selectedNode]} />
+      )}
+      {!isSinglePageApp && (
+        <VerticalSizeControl
+          minValue={GRAPH_INITIAL_HEIGHT}
+          maxValue={GRAPH_HEIGHT_MAX}
+          value={graphHeight}
+          increment={GRAPH_HEIGHT_INCREMENT}
+          onChange={activateGraphHeight}
+        />
       )}
     </div>
   );
