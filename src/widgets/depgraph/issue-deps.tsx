@@ -54,6 +54,7 @@ const DEFAULT_USE_HIERARCHICAL_LAYOUT = false;
 const DEFAULT_USE_ALTERNATE_TREE_LAYOUT = false;
 
 const GRAPH_HEIGHT_MARGIN = 40;
+const GRAPH_HEIGHT_MIN_VALUE = 110;
 
 type GRAPH_SIZE_ITEM = {
   height: number;
@@ -167,6 +168,13 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     showWhenLinksUnknown: true,
   });
   const [graphNodeControlsOpen, setGraphNodeControlsOpen] = useState<boolean>(true);
+
+  // Auto-collapse the floating menu when the graph is shrunk to its smallest size.
+  useEffect(() => {
+    if (graphHeight <= GRAPH_HEIGHT_MIN_VALUE) {
+      setGraphNodeControlsOpen(false);
+    }
+  }, [graphHeight]);
 
   const selectNode = (nodeId: string) => {
     setHighlightedNodes(null);
@@ -622,7 +630,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       )}
       {!isSinglePageApp && (
         <VerticalSizeControl
-          minValue={100}
+          minValue={GRAPH_HEIGHT_MIN_VALUE}
           maxValue={1400}
           value={graphHeight}
           increment={100}
