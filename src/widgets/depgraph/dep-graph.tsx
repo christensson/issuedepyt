@@ -530,6 +530,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       // Run layout.
       const cyLayoutOpts = getLayoutOptions(layoutOptions);
       const layout = cy.layout(cyLayoutOpts);
+      layout.removeListener("layoutstop");
       layout.on("layoutstop", () => {
         cy.fit(undefined, GRAPH_PADDING);
       });
@@ -542,12 +543,14 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     if (cyRef.current) {
       const cy = cyRef.current;
 
+      cy.removeListener("onetap", "node");
       cy.on("onetap", "node", (evt) => {
         const node = evt.target;
         console.log(`Selecting node: ${node.id()}`);
         setSelectedNode(node.id());
       });
 
+      cy.removeListener("dbltap", "node");
       cy.on("dbltap", "node", (evt) => {
         const node = evt.target;
         console.log(`Opening node: ${node.id()}`);
