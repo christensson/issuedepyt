@@ -23,6 +23,54 @@ import type { IssueInfo, IssueLink } from "./issue-types";
 
 const GRAPH_PADDING = 20;
 
+const MIN_NODE_WIDTH = 40;
+const MAX_NODE_WIDTH = 400;
+const MIN_NODE_HEIGHT = 20;
+const MAX_NODE_HEIGHT = 200;
+
+const MIN_ZOOM_AFTER_FIT = 0.8;
+const MAX_ZOOM_AFTER_FIT = 2.0;
+
+/**
+ * Fit the graph into the viewport, clamping zoom to [MIN, MAX].
+ * Returns the extra vertical pixels needed, or 0 if the graph fits
+ * or vertical growth wouldn't help.
+ */
+const smartFitGraph = (cy: Core): number => {
+  cy.fit(undefined, GRAPH_PADDING);
+  const zoom = cy.zoom();
+  if (zoom > MAX_ZOOM_AFTER_FIT) {
+    cy.zoom(MAX_ZOOM_AFTER_FIT);
+    cy.center();
+    return 0;
+  } else if (zoom < MIN_ZOOM_AFTER_FIT) {
+    cy.zoom(MIN_ZOOM_AFTER_FIT);
+    cy.center();
+
+    // Check whether vertical growth would actually help by comparing
+    // the graph bounding box to the container dimensions.
+    // If the graph is much wider than it is tall relative to the
+    // container, adding height won't improve the fit.
+    const bb = cy.elements().boundingBox();
+    const containerWidth = cy.width();
+    const containerHeight = cy.height();
+    if (bb.w === 0 || bb.h === 0 || containerWidth === 0 || containerHeight === 0) {
+      return containerHeight;
+    }
+    const graphAspect = bb.w / bb.h;
+    const containerAspect = containerWidth / containerHeight;
+    // Only grow if the graph is at least as tall (proportionally) as the container.
+    if (graphAspect > containerAspect * 1.5) {
+      return 0;
+    }
+    // Calculate how much taller the container needs to be.
+    const scaleFactor = MIN_ZOOM_AFTER_FIT / zoom;
+    const extraHeight = Math.ceil(containerHeight * (scaleFactor - 1));
+    return Math.max(0, extraHeight);
+  }
+  return 0;
+};
+
 // Register Cytoscape extensions
 cytoscape.use(dagre);
 cytoscape.use(klay);
@@ -54,6 +102,7 @@ interface DepGraphProps extends React.PropsWithChildren {
   layoutOptions: LayoutOptions;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
+  onRequestGrow?: (extraHeight: number) => void;
 }
 
 const FONT_FAMILY = "system-ui, Arial, sans-serif";
@@ -291,6 +340,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   layoutOptions,
   setSelectedNode,
   onOpenNode,
+  onRequestGrow,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -353,13 +403,13 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   const calcNodeWidth = (node: any) => {
     const label = node.data("label") || "";
     const dimensions = calcLabelDimensions(label, node);
-    return dimensions.width;
+    return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, dimensions.width));
   };
 
   const calcNodeHeight = (node: any) => {
     const label = node.data("label") || "";
     const dimensions = calcLabelDimensions(label, node);
-    return dimensions.height;
+    return Math.min(MAX_NODE_HEIGHT, Math.max(MIN_NODE_HEIGHT, dimensions.height));
   };
 
   // Initialize Cytoscape.
@@ -544,11 +594,18 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const layout = cy.layout(cyLayoutOpts);
       layout.removeListener("layoutstop");
       layout.on("layoutstop", () => {
-        cy.fit(undefined, GRAPH_PADDING);
+        const extraHeight = smartFitGraph(cy);
+        if (extraHeight > 0 && onRequestGrow) {
+          onRequestGrow(extraHeight);
+          setTimeout(() => {
+            cy.resize();
+            smartFitGraph(cy);
+          }, 100);
+        }
       });
       layout.run();
     }
-  }, [maxNodeWidth, layoutOptions, nodeLabelOptions]);
+  }, [maxNodeWidth, layoutOptions, nodeLabelOptions, onRequestGrow]);
 
   // Update event handlers when callbacks change.
   useEffect(() => {
@@ -587,13 +644,20 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cyLayoutOpts = getLayoutOptions(layoutOptions);
       const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
-        cy.fit(undefined, GRAPH_PADDING);
+        const extraHeight = smartFitGraph(cy);
+        if (extraHeight > 0 && onRequestGrow) {
+          onRequestGrow(extraHeight);
+          setTimeout(() => {
+            cy.resize();
+            smartFitGraph(cy);
+          }, 100);
+        }
       });
       layout.run();
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, nodeLabelOptions, layoutOptions]);
+  }, [issues, fieldInfo, filterState, nodeLabelOptions, layoutOptions, onRequestGrow]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {
@@ -632,7 +696,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   const fitGraph = () => {
     if (cyRef.current) {
       const cy = cyRef.current;
-      cy.fit(undefined, GRAPH_PADDING);
+      smartFitGraph(cy);
     }
   };
 
