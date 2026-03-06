@@ -54,7 +54,7 @@ const DEFAULT_USE_HIERARCHICAL_LAYOUT = false;
 const DEFAULT_USE_ALTERNATE_TREE_LAYOUT = false;
 
 const GRAPH_HEIGHT_MARGIN = 40;
-const GRAPH_HEIGHT_MIN_VALUE = 110;
+const GRAPH_CONTROLS_HEIGHT_MIN_VALUE = 200;
 
 type GRAPH_SIZE_ITEM = {
   height: number;
@@ -65,28 +65,28 @@ type GRAPH_SIZE_ITEM = {
 };
 const GRAPH_SIZE: Array<GRAPH_SIZE_ITEM> = [
   {
-    height: 100,
+    height: 130,
     limits: {
       maxDepth: 0,
       maxCount: 2,
     },
   },
   {
-    height: 200,
+    height: 260,
     limits: {
       maxDepth: 1,
       maxCount: 10,
     },
   },
   {
-    height: 400,
+    height: 390,
     limits: {
       maxDepth: 3,
       maxCount: 20,
     },
   },
   {
-    height: 700,
+    height: 520,
   },
 ];
 
@@ -171,7 +171,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
 
   // Auto-collapse the floating menu when the graph is shrunk to its smallest size.
   useEffect(() => {
-    if (graphHeight <= GRAPH_HEIGHT_MIN_VALUE) {
+    if (graphHeight <= GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
       setGraphNodeControlsOpen(false);
     }
   }, [graphHeight]);
@@ -609,11 +609,18 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
             )}
             <div style={{ marginLeft: "auto" }}>
               <Tooltip
-                title={graphNodeControlsOpen ? undefined : "Expand graph controls"}
+                title={
+                  graphNodeControlsOpen
+                    ? undefined
+                    : !graphNodeControlsOpen && graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN
+                      ? "Increase graph height to expand controls"
+                      : "Expand graph controls"
+                }
                 theme={Theme.LIGHT}
               >
                 <Button
                   inline
+                  disabled={!graphNodeControlsOpen && graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN}
                   onClick={() => setGraphNodeControlsOpen((prev) => !prev)}
                   iconRight={graphNodeControlsOpen ? DoubleChevronRight : DoubleChevronLeft}
                   ghost
@@ -630,10 +637,10 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       )}
       {!isSinglePageApp && (
         <VerticalSizeControl
-          minValue={GRAPH_HEIGHT_MIN_VALUE}
+          minValue={GRAPH_CONTROLS_HEIGHT_MIN_VALUE}
           maxValue={1400}
           value={graphHeight}
-          increment={100}
+          increment={130}
           onChange={activateGraphHeight}
         />
       )}
