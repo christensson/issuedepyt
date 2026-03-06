@@ -2,6 +2,46 @@ import { IssueInfo, IssueLink, IssuePeriod } from "./issue-types.ts";
 import { FilterState } from "../../../@types/filter-state";
 import { calcBusinessDays } from "./time-utils.ts";
 
+export const filterByReachability = (issues: Record<string, IssueInfo>): Record<string, IssueInfo> => {
+  // Find root nodes (depth 0) — these are always visible.
+  const rootIds = Object.values(issues)
+    .filter((issue) => issue.depth === 0)
+    .map((issue) => issue.id);
+
+  if (rootIds.length === 0) return issues;
+
+  const reachable = new Set<string>(rootIds);
+  const queue: string[] = [...rootIds];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    const current = issues[currentId];
+    if (!current) continue;
+
+    // upstreamLinks targets are downstream nodes, gated by showDownstreamNodes.
+    const upstreamTargets = current.upstreamLinks
+      .filter((link) => current.showDownstreamNodes || link.direction === "BOTH")
+      .map((link) => link.targetId)
+      .filter((id) => id in issues && !reachable.has(id));
+
+    // downstreamLinks targets are upstream nodes, gated by showUpstreamNodes.
+    const downstreamTargets = current.downstreamLinks
+      .filter((link) => current.showUpstreamNodes || link.direction === "BOTH")
+      .map((link) => link.targetId)
+      .filter((id) => id in issues && !reachable.has(id));
+
+    for (const targetId of [...upstreamTargets, ...downstreamTargets]) {
+      reachable.add(targetId);
+      queue.push(targetId);
+    }
+  }
+
+  const filtered = Object.fromEntries(
+    Object.entries(issues).filter(([id]) => reachable.has(id)),
+  );
+  return filtered;
+};
+
 export const filterIssues = (filter: FilterState, issues: Record<string, IssueInfo>) => {
   const filteredIssues = Object.fromEntries(
     Object.entries(issues).filter(([key, issue]) => {
@@ -22,14 +62,18 @@ export const filterIssues = (filter: FilterState, issues: Record<string, IssueIn
     return filteredIssues;
   }
 
-  // Remove orhan issues by first finding all relations and then only keeping
-  // issues that has both ends of the relations visible.
+  // Remove orphan issues by first finding all relations and then only keeping
+  // issues that have both ends of the relations visible.
   const relations = Object.entries(filteredIssues)
     .map(([key, issue]) => issue)
     .flatMap((issue: IssueInfo) =>
       [
-        ...(issue.showUpstream ? issue.upstreamLinks : []),
-        ...(issue.showDownstream ? issue.downstreamLinks : []),
+        ...(issue.showDownstreamNodes
+          ? issue.upstreamLinks
+          : issue.upstreamLinks.filter((link: IssueLink) => link.direction === "BOTH")),
+        ...(issue.showUpstreamNodes
+          ? issue.downstreamLinks
+          : issue.downstreamLinks.filter((link: IssueLink) => link.direction === "BOTH")),
       ].map((link: IssueLink) => ({
         from: issue.id,
         to: link.targetId,

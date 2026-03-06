@@ -18,10 +18,58 @@ import fcose from "cytoscape-fcose";
 import type { FieldInfo, FieldInfoField } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
 import { Color, ColorPaletteItem, hexToRgb, rgbToHex } from "./colors";
-import { filterIssues } from "./issue-helpers";
+import { filterByReachability, filterIssues } from "./issue-helpers";
 import type { IssueInfo, IssueLink } from "./issue-types";
 
 const GRAPH_PADDING = 20;
+
+const MIN_NODE_WIDTH = 40;
+const MAX_NODE_WIDTH = 400;
+const MIN_NODE_HEIGHT = 20;
+const MAX_NODE_HEIGHT = 200;
+
+const MIN_ZOOM_AFTER_FIT = 0.8;
+const MAX_ZOOM_AFTER_FIT = 2.0;
+
+/**
+ * Fit the graph into the viewport, clamping zoom to [MIN, MAX].
+ * Returns the extra vertical pixels needed, or 0 if the graph fits
+ * or vertical growth wouldn't help.
+ */
+const smartFitGraph = (cy: Core): number => {
+  cy.fit(undefined, GRAPH_PADDING);
+  const zoom = cy.zoom();
+  if (zoom > MAX_ZOOM_AFTER_FIT) {
+    cy.zoom(MAX_ZOOM_AFTER_FIT);
+    cy.center();
+    return 0;
+  } else if (zoom < MIN_ZOOM_AFTER_FIT) {
+    cy.zoom(MIN_ZOOM_AFTER_FIT);
+    cy.center();
+
+    // Check whether vertical growth would actually help by comparing
+    // the graph bounding box to the container dimensions.
+    // If the graph is much wider than it is tall relative to the
+    // container, adding height won't improve the fit.
+    const bb = cy.elements().boundingBox();
+    const containerWidth = cy.width();
+    const containerHeight = cy.height();
+    if (bb.w === 0 || bb.h === 0 || containerWidth === 0 || containerHeight === 0) {
+      return containerHeight;
+    }
+    const graphAspect = bb.w / bb.h;
+    const containerAspect = containerWidth / containerHeight;
+    // Only grow if the graph is at least as tall (proportionally) as the container.
+    if (graphAspect > containerAspect * 1.5) {
+      return 0;
+    }
+    // Calculate how much taller the container needs to be.
+    const scaleFactor = MIN_ZOOM_AFTER_FIT / zoom;
+    const extraHeight = Math.ceil(containerHeight * (scaleFactor - 1));
+    return Math.max(0, extraHeight);
+  }
+  return 0;
+};
 
 // Register Cytoscape extensions
 cytoscape.use(dagre);
@@ -54,6 +102,7 @@ interface DepGraphProps extends React.PropsWithChildren {
   layoutOptions: LayoutOptions;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
+  onRequestGrow?: (extraHeight: number) => void;
 }
 
 const FONT_FAMILY = "system-ui, Arial, sans-serif";
@@ -204,32 +253,80 @@ const getGraphObjects = (
   issues: { [key: string]: IssueInfo },
   fieldInfo: FieldInfo,
   nodeLabelOptions: NodeLabelOptions,
+  selectedIssueId: string | null,
 ): ElementDefinition[] => {
-  const linkInfo = {};
   const linksAndEdges = Object.values(issues).flatMap((issue: IssueInfo) =>
     [
-      ...(issue.showUpstream ? issue.upstreamLinks : []),
-      ...(issue.showDownstream ? issue.downstreamLinks : []),
+      // upstreamLinks targets are downstream nodes, gated by showDownstreamNodes.
+      ...(issue.showDownstreamNodes
+        ? issue.upstreamLinks.map((link: IssueLink) => ({
+            link,
+            configuredRelationKind: "upstream" as const,
+          }))
+        : []),
+      // downstreamLinks targets are upstream nodes, gated by showUpstreamNodes.
+      ...(issue.showUpstreamNodes
+        ? issue.downstreamLinks.map((link: IssueLink) => ({
+            link,
+            configuredRelationKind: "downstream" as const,
+          }))
+        : []),
+      ...(!issue.showDownstreamNodes
+        ? issue.upstreamLinks
+            .filter((link: IssueLink) => link.direction === "BOTH")
+            .map((link: IssueLink) => ({
+              link,
+              configuredRelationKind: "upstream" as const,
+            }))
+        : []),
+      ...(!issue.showUpstreamNodes
+        ? issue.downstreamLinks
+            .filter((link: IssueLink) => link.direction === "BOTH")
+            .map((link: IssueLink) => ({
+              link,
+              configuredRelationKind: "downstream" as const,
+            }))
+        : []),
     ]
       // Only include links where the target issue exists.
-      .filter((link: IssueLink) => link.targetId in issues)
-      .map((link: IssueLink) => {
+      .filter(({ link }) => link.targetId in issues)
+      .map(({ link, configuredRelationKind }) => {
+        const relationKind = configuredRelationKind;
+
+        // Layout direction: source/target are assigned so that downstream-linked
+        // nodes (visually upstream / above) become graph sources and upstream-linked
+        // nodes (visually downstream / below) become graph targets.
+        const isUpstream = relationKind === "upstream";
+        const source = isUpstream ? issue.id : link.targetId;
+        const target = isUpstream ? link.targetId : issue.id;
+
+        // Edge label: always from the current issue's perspective, matching what
+        // YouTrack shows for this issue. E.g. B "is required for" C, or B "depends on" A.
         const label =
           link.direction === "OUTWARD" || link.direction === "BOTH"
             ? link.sourceToTarget
             : link.targetToSource;
+
+        // Arrow direction: the semantic arrow goes from the current issue toward
+        // the linked issue (matching the label direction).
+        // Because source/target are swapped for visual layout, the arrow flags
+        // are also swapped to keep arrows pointing in the correct semantic direction.
+        const isDirected = link.direction !== "BOTH";
+        const arrowTo = isDirected && isUpstream;
+        const arrowFrom = isDirected && !isUpstream;
+
         return {
           direction: link.direction,
           type: link.type,
           edge: {
             data: {
               id: `${issue.id}-${link.targetId}-${link.type}`,
-              source: issue.id,
-              target: link.targetId,
+              source,
+              target,
               label,
               title: label,
-              arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
-              arrowTo: link.direction !== "BOTH",
+              arrowFrom,
+              arrowTo,
             },
           },
         };
@@ -237,30 +334,37 @@ const getGraphObjects = (
   );
 
   // Filter out duplicate edges.
+  // When both nodes of a relationship have their links loaded, each side
+  // produces an edge for the same underlying link (e.g. "depends on" from A
+  // and "is required for" from B). Deduplicate by checking both directions.
   let edges: ElementDefinition[] = [];
-  const unDirectedEdgesAdded: { [key: string]: boolean } = {};
+  const edgesAdded: { [key: string]: boolean } = {};
   for (const { direction, type, edge } of linksAndEdges) {
-    // Include all directed edges.
-    if (direction !== "BOTH") {
-      edges.push(edge);
-      continue;
-    }
-
-    // If non-directed, check if already added.
-    const reverseEdgeKey = `${type}-${edge.data.target}-${edge.data.source}`;
-
-    if (reverseEdgeKey in unDirectedEdgesAdded) {
-      continue;
-    }
-
-    // Add and mark as added.
-    edges.push(edge);
     const edgeKey = `${type}-${edge.data.source}-${edge.data.target}`;
-    unDirectedEdgesAdded[edgeKey] = true;
+    const reverseEdgeKey = `${type}-${edge.data.target}-${edge.data.source}`;
+    if (edgeKey in edgesAdded || reverseEdgeKey in edgesAdded) {
+      continue;
+    }
+
+    edges.push(edge);
+    edgesAdded[edgeKey] = true;
+  }
+
+  const visibleNodeIds = new Set<string>();
+  edges.forEach((edge) => {
+    visibleNodeIds.add(edge.data.source);
+    visibleNodeIds.add(edge.data.target);
+  });
+  if (selectedIssueId && selectedIssueId in issues) {
+    visibleNodeIds.add(selectedIssueId);
+  }
+  if (visibleNodeIds.size === 0) {
+    Object.keys(issues).forEach((id) => visibleNodeIds.add(id));
   }
 
   const nodes: ElementDefinition[] = Object.values(issues)
     // Transform issues to graph nodes.
+    .filter((issue: IssueInfo) => visibleNodeIds.has(issue.id))
     .map((issue: IssueInfo) => {
       const colorEntry = getColor(issue.state, fieldInfo?.stateField);
       const node: ElementDefinition = {
@@ -291,6 +395,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   layoutOptions,
   setSelectedNode,
   onOpenNode,
+  onRequestGrow,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -353,13 +458,13 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   const calcNodeWidth = (node: any) => {
     const label = node.data("label") || "";
     const dimensions = calcLabelDimensions(label, node);
-    return dimensions.width;
+    return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, dimensions.width));
   };
 
   const calcNodeHeight = (node: any) => {
     const label = node.data("label") || "";
     const dimensions = calcLabelDimensions(label, node);
-    return dimensions.height;
+    return Math.min(MAX_NODE_HEIGHT, Math.max(MIN_NODE_HEIGHT, dimensions.height));
   };
 
   // Initialize Cytoscape.
@@ -434,7 +539,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
           {
             selector: "edge[?arrowFrom]",
             style: {
-              "source-arrow-shape": "diamond",
+              "source-arrow-shape": "triangle",
             },
           },
           {
@@ -448,7 +553,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         ],
         userZoomingEnabled: true,
         userPanningEnabled: true,
-        boxSelectionEnabled: true,
+        boxSelectionEnabled: false,
       });
 
       // Add tooltip support
@@ -544,11 +649,18 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const layout = cy.layout(cyLayoutOpts);
       layout.removeListener("layoutstop");
       layout.on("layoutstop", () => {
-        cy.fit(undefined, GRAPH_PADDING);
+        const extraHeight = smartFitGraph(cy);
+        if (extraHeight > 0 && onRequestGrow) {
+          onRequestGrow(extraHeight);
+          setTimeout(() => {
+            cy.resize();
+            smartFitGraph(cy);
+          }, 100);
+        }
       });
       layout.run();
     }
-  }, [maxNodeWidth, layoutOptions, nodeLabelOptions]);
+  }, [maxNodeWidth, layoutOptions, nodeLabelOptions, onRequestGrow]);
 
   // Update event handlers when callbacks change.
   useEffect(() => {
@@ -575,9 +687,14 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   useEffect(() => {
     if (cyRef.current) {
       const cy = cyRef.current;
-      const visibleIssues = filterIssues(filterState, issues);
+      const visibleIssues = filterByReachability(filterIssues(filterState, issues));
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
-      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOptions);
+      const elements = getGraphObjects(
+        visibleIssues,
+        fieldInfo,
+        nodeLabelOptions,
+        selectedIssueId,
+      );
 
       // Replace all elements.
       cy.elements().remove();
@@ -587,13 +704,20 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cyLayoutOpts = getLayoutOptions(layoutOptions);
       const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
-        cy.fit(undefined, GRAPH_PADDING);
+        const extraHeight = smartFitGraph(cy);
+        if (extraHeight > 0 && onRequestGrow) {
+          onRequestGrow(extraHeight);
+          setTimeout(() => {
+            cy.resize();
+            smartFitGraph(cy);
+          }, 100);
+        }
       });
       layout.run();
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, nodeLabelOptions, layoutOptions]);
+  }, [issues, fieldInfo, filterState, nodeLabelOptions, layoutOptions, onRequestGrow, selectedIssueId]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {
@@ -628,11 +752,10 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       }
     }
   }, [selectedIssueId]);
-
   const fitGraph = () => {
     if (cyRef.current) {
       const cy = cyRef.current;
-      cy.fit(undefined, GRAPH_PADDING);
+      smartFitGraph(cy);
     }
   };
 
