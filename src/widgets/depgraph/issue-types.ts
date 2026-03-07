@@ -53,7 +53,7 @@ export interface IssueInfo {
   upstreamLinks: Array<IssueLink>; // YT-upstream links (targets appear visually below).
   downstreamLinks: Array<IssueLink>; // YT-downstream links (targets appear visually above).
   linksKnown: boolean;
-  showUpstreamNodes: boolean; // Show nodes that are visually above (reached via downstreamLinks).
-  showDownstreamNodes: boolean; // Show nodes that are visually below (reached via upstreamLinks).
+  showUpstreamNodes: boolean; // Show nodes that are visually above (reached via upstreamLinks).
+  showDownstreamNodes: boolean; // Show nodes that are visually below (reached via downstreamLinks).
   extraFields: Array<CustomField>;
 }

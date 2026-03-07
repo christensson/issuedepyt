@@ -362,15 +362,15 @@ async function fetchDepsRecursive(
   const isSameLink = (a: IssueLink, b: IssueLink) =>
     a.targetId === b.targetId && a.direction === b.direction && a.type === b.type;
   const idsToFetch: Array<string> = [];
-  // downstreamLinks targets are upstream nodes — follow them when going upstream.
-  if (followDirs.includes("upstream")) {
+  // downstreamLinks targets are downstream nodes — follow them when going downstream.
+  if (followDirs.includes("downstream")) {
     const newLinks = issue.downstreamLinks.filter(
       (link: IssueLink) => !prevIssueDownstreamLinks.some((x) => isSameLink(x, link))
     );
     idsToFetch.push(...newLinks.map((link: IssueLink) => link.targetId));
   }
-  // upstreamLinks targets are downstream nodes — follow them when going downstream.
-  if (followDirs.includes("downstream")) {
+  // upstreamLinks targets are upstream nodes — follow them when going upstream.
+  if (followDirs.includes("upstream")) {
     const newLinks = issue.upstreamLinks.filter(
       (link: IssueLink) => !prevIssueUpstreamLinks.some((x) => isSameLink(x, link))
     );

@@ -18,15 +18,15 @@ export const filterByReachability = (issues: Record<string, IssueInfo>): Record<
     const current = issues[currentId];
     if (!current) continue;
 
-    // upstreamLinks targets are downstream nodes, gated by showDownstreamNodes.
+    // upstreamLinks targets are upstream nodes, gated by showUpstreamNodes.
     const upstreamTargets = current.upstreamLinks
-      .filter((link) => current.showDownstreamNodes || link.direction === "BOTH")
+      .filter((link) => current.showUpstreamNodes || link.direction === "BOTH")
       .map((link) => link.targetId)
       .filter((id) => id in issues && !reachable.has(id));
 
-    // downstreamLinks targets are upstream nodes, gated by showUpstreamNodes.
+    // downstreamLinks targets are downstream nodes, gated by showDownstreamNodes.
     const downstreamTargets = current.downstreamLinks
-      .filter((link) => current.showUpstreamNodes || link.direction === "BOTH")
+      .filter((link) => current.showDownstreamNodes || link.direction === "BOTH")
       .map((link) => link.targetId)
       .filter((id) => id in issues && !reachable.has(id));
 
@@ -68,10 +68,10 @@ export const filterIssues = (filter: FilterState, issues: Record<string, IssueIn
     .map(([key, issue]) => issue)
     .flatMap((issue: IssueInfo) =>
       [
-        ...(issue.showDownstreamNodes
+        ...(issue.showUpstreamNodes
           ? issue.upstreamLinks
           : issue.upstreamLinks.filter((link: IssueLink) => link.direction === "BOTH")),
-        ...(issue.showUpstreamNodes
+        ...(issue.showDownstreamNodes
           ? issue.downstreamLinks
           : issue.downstreamLinks.filter((link: IssueLink) => link.direction === "BOTH")),
       ].map((link: IssueLink) => ({

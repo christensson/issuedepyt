@@ -257,34 +257,34 @@ const getGraphObjects = (
 ): ElementDefinition[] => {
   const linksAndEdges = Object.values(issues).flatMap((issue: IssueInfo) =>
     [
-      // upstreamLinks targets are downstream nodes, gated by showDownstreamNodes.
+      // downstreamLinks targets are downstream nodes, gated by showDownstreamNodes.
       ...(issue.showDownstreamNodes
-        ? issue.upstreamLinks.map((link: IssueLink) => ({
-            link,
-            configuredRelationKind: "upstream" as const,
-          }))
-        : []),
-      // downstreamLinks targets are upstream nodes, gated by showUpstreamNodes.
-      ...(issue.showUpstreamNodes
         ? issue.downstreamLinks.map((link: IssueLink) => ({
             link,
             configuredRelationKind: "downstream" as const,
           }))
         : []),
-      ...(!issue.showDownstreamNodes
-        ? issue.upstreamLinks
-            .filter((link: IssueLink) => link.direction === "BOTH")
-            .map((link: IssueLink) => ({
-              link,
-              configuredRelationKind: "upstream" as const,
-            }))
+      // upstreamLinks targets are upstream nodes, gated by showUpstreamNodes.
+      ...(issue.showUpstreamNodes
+        ? issue.upstreamLinks.map((link: IssueLink) => ({
+            link,
+            configuredRelationKind: "upstream" as const,
+          }))
         : []),
-      ...(!issue.showUpstreamNodes
+      ...(!issue.showDownstreamNodes
         ? issue.downstreamLinks
             .filter((link: IssueLink) => link.direction === "BOTH")
             .map((link: IssueLink) => ({
               link,
               configuredRelationKind: "downstream" as const,
+            }))
+        : []),
+      ...(!issue.showUpstreamNodes
+        ? issue.upstreamLinks
+            .filter((link: IssueLink) => link.direction === "BOTH")
+            .map((link: IssueLink) => ({
+              link,
+              configuredRelationKind: "upstream" as const,
             }))
         : []),
     ]
