@@ -19,14 +19,15 @@ import React, { useCallback, useEffect, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
 import type { FollowSettings } from "../../../@types/follow-settings";
+import type {
+  HierarchicalDirection,
+  LayoutOptions,
+  NodeLabelOptions,
+} from "../../../@types/graph-view-settings";
 import type { Settings } from "../../../@types/settings";
 import { host } from "../global/ytApp";
 import { openGraphPage } from "../issuedepyt-page/open-page";
-import DepGraph, {
-  type HierarchicalDirection,
-  type LayoutOptions,
-  type NodeLabelOptions,
-} from "./dep-graph";
+import DepGraph from "./dep-graph";
 import DepTimeline from "./dep-timeline";
 import exportData from "./export";
 import type { FollowDirection, FollowDirections } from "./fetch-deps";

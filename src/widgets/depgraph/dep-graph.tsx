@@ -17,6 +17,7 @@ import fcose from "cytoscape-fcose";
 // @ts-ignore - No TypeScript definitions available
 import type { FieldInfo, FieldInfoField } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
+import type { LayoutOptions, NodeLabelOptions } from "../../../@types/graph-view-settings";
 import { Color, ColorPaletteItem, hexToRgb, rgbToHex } from "./colors";
 import { filterIssues } from "./issue-helpers";
 import type { IssueInfo, IssueLink } from "./issue-types";
@@ -27,21 +28,6 @@ const GRAPH_PADDING = 20;
 cytoscape.use(dagre);
 cytoscape.use(klay);
 cytoscape.use(fcose);
-
-export type NodeLabelOptions = {
-  showSummary: boolean;
-  showFlags: boolean;
-  showType: boolean;
-};
-
-export type HierarchicalDirection = "TB" | "LR" | "BT" | "RL";
-
-export type LayoutOptions = {
-  hierarchical: boolean;
-  alternateTreeLayout: boolean;
-  hierarchicalDirection: HierarchicalDirection;
-  horizontalEdgeLabels: boolean;
-};
 
 interface DepGraphProps extends React.PropsWithChildren {
   issues: { [id: string]: IssueInfo };
