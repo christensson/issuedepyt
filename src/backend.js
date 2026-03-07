@@ -16,11 +16,21 @@ exports.httpHandler = {
       scope: "issue",
       handle: function handle(ctx) {
         const body = JSON.parse(ctx.request.body);
-        const settings = ctx.settings;
-        const graphContext = body.graphContext || {};
+        const resp = {};
         // Store context in user extension properties.
-        ctx.currentUser.extensionProperties.issueId = body.issueId;
-        ctx.currentUser.extensionProperties.graphContext = JSON.stringify(graphContext);
+
+        if (body?.issueId) {
+          ctx.currentUser.extensionProperties.issueId = body.issueId;
+          resp.issueId = body.issueId;
+        }
+
+        if (body?.graphContext) {
+          const graphContext = body.graphContext || {};
+          ctx.currentUser.extensionProperties.graphContext = JSON.stringify(graphContext);
+        }
+
+        // Make a copy of settings.
+        const settings = ctx.settings;
         ctx.currentUser.extensionProperties.typeField = settings.typeField;
         ctx.currentUser.extensionProperties.typeField = settings.typeField;
         ctx.currentUser.extensionProperties.stateField = settings.stateField;
@@ -32,7 +42,9 @@ exports.httpHandler = {
         ctx.currentUser.extensionProperties.extraCustomFields = settings.extraCustomFields;
         ctx.currentUser.extensionProperties.upstreamRelations = settings.upstreamRelations;
         ctx.currentUser.extensionProperties.downstreamRelations = settings.downstreamRelations;
-        ctx.response.json({ issueId: body.issueId });
+
+        resp.success = true;
+        ctx.response.json(resp);
       },
     },
   ],

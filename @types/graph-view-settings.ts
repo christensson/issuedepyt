@@ -12,3 +12,22 @@ export type LayoutOptions = {
   hierarchicalDirection: HierarchicalDirection;
   horizontalEdgeLabels: boolean;
 };
+
+export type GraphViewSettings = {
+  layoutOptions: LayoutOptions;
+  nodeLabelOptions: NodeLabelOptions;
+};
+
+export const defaultGraphViewSettings: GraphViewSettings = {
+  layoutOptions: {
+    hierarchical: true,
+    hierarchicalDirection: "TB",
+    alternateTreeLayout: false,
+    horizontalEdgeLabels: true,
+  },
+  nodeLabelOptions: {
+    showSummary: true,
+    showFlags: true,
+    showType: true,
+  },
+};

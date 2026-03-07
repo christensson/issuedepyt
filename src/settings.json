@@ -90,13 +90,6 @@
       "default": false,
       "x-scope": "GLOBAL"
     },
-    "useHierarchicalLayout": {
-      "type": "boolean",
-      "title": "Use hierarchical tree layout",
-      "description": "Use the hierarcical tree layout by default.",
-      "default": true,
-      "x-scope": "GLOBAL"
-    },
     "maxRecursionDepth": {
       "type": "integer",
       "title": "Maximum recursion depth",

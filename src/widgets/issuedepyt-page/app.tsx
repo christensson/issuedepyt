@@ -1,10 +1,15 @@
+import Alert from "@jetbrains/ring-ui-built/components/alert/alert";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
-import { Col, Grid, Row } from "@jetbrains/ring-ui-built/components/grid/grid";
 import Link from "@jetbrains/ring-ui-built/components/link/link";
 import Text from "@jetbrains/ring-ui-built/components/text/text";
 import React, { memo, useEffect, useMemo, useState } from "react";
-import type { FollowSettings } from "../../../@types/follow-settings";
-import { GraphContext } from "../../../@types/graph-context";
+import {
+  defaultGraphLoadSettings,
+  GraphContext,
+  type GraphLoadSettings,
+} from "../../../@types/graph-context";
+import { defaultGraphViewSettings, GraphViewSettings } from "../../../@types/graph-view-settings";
+import { NoteProps } from "../../../@types/note";
 import type { Settings } from "../../../@types/settings";
 import IssueDeps from "../depgraph/issue-deps";
 import { host } from "../global/ytApp";
@@ -16,13 +21,14 @@ const AppComponent: React.FunctionComponent = () => {
   const [issueId, setIssueId] = useState<string | null>(
     entity?.type === "issue" ? entity.id : null,
   );
-  const [settings, setSettings] = useState<Settings>({});
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
-  const [followSettings, setFollowSettings] = useState<FollowSettings>({
-    followUpstream: true,
-    followDownstream: false,
-  });
   const [openIssueVisible, setOpenIssueVisible] = useState<boolean>(false);
+  const [settings, setSettings] = useState<Settings>({});
+  const [graphLoadSettings, setGraphLoadSettings] =
+    useState<GraphLoadSettings>(defaultGraphLoadSettings);
+  const [graphViewSettings, setGraphViewSettings] =
+    useState<GraphViewSettings>(defaultGraphViewSettings);
+  const [note, setNote] = useState<NoteProps | null>(null);
 
   useEffect(() => {
     window.onresize = () => {
@@ -57,7 +63,26 @@ const AppComponent: React.FunctionComponent = () => {
         const graphContext = resp.graphContext;
         console.log("Got graph context", graphContext);
         if (graphContext?.followSettings) {
-          setFollowSettings(graphContext.followSettings);
+          setGraphLoadSettings((prev) => ({
+            ...prev,
+            followSettings: {
+              ...prev.followSettings,
+              ...graphContext.followSettings,
+            },
+          }));
+        }
+        if (graphContext?.layoutOptions || graphContext?.nodeLabelOptions) {
+          setGraphViewSettings((prev) => ({
+            ...prev,
+            layoutOptions: {
+              ...prev.layoutOptions,
+              ...graphContext?.layoutOptions,
+            },
+            nodeLabelOptions: {
+              ...prev.nodeLabelOptions,
+              ...graphContext?.nodeLabelOptions,
+            },
+          }));
         }
         const newSettings = resp.settings;
         console.log("Got settings", newSettings);
@@ -72,6 +97,16 @@ const AppComponent: React.FunctionComponent = () => {
 
   return (
     <div className="full-page-widget">
+      {note !== null && (
+        <Alert
+          className="alert-note"
+          type={note.type}
+          timeout={note?.timeout}
+          onCloseRequest={() => setNote(null)}
+        >
+          {note.message}
+        </Alert>
+      )}
       {openIssueVisible && (
         <OpenIssueDialog
           onClose={() => setOpenIssueVisible(false)}
@@ -102,8 +137,11 @@ const AppComponent: React.FunctionComponent = () => {
           <IssueDeps
             issueId={issueId}
             settings={settings}
-            followSettings={followSettings}
-            setFollowSettings={setFollowSettings}
+            graphLoadSettings={graphLoadSettings}
+            setGraphLoadSettings={setGraphLoadSettings}
+            graphViewSettings={graphViewSettings}
+            setGraphViewSettings={setGraphViewSettings}
+            setNote={setNote}
             isSinglePageApp={true}
           />
         </div>

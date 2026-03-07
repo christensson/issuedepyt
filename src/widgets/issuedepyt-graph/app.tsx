@@ -1,8 +1,15 @@
+import Alert from "@jetbrains/ring-ui-built/components/alert/alert";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
 import { Col, Grid, Row } from "@jetbrains/ring-ui-built/components/grid/grid";
 import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
 import React, { memo, useEffect, useMemo, useState } from "react";
-import type { FollowSettings } from "../../../@types/follow-settings";
+import {
+  defaultGraphLoadSettings,
+  GraphContext,
+  type GraphLoadSettings,
+} from "../../../@types/graph-context";
+import { defaultGraphViewSettings, GraphViewSettings } from "../../../@types/graph-view-settings";
+import { NoteProps } from "../../../@types/note";
 import type { Settings } from "../../../@types/settings";
 import IssueDeps from "../depgraph/issue-deps";
 import { host } from "../global/ytApp";
@@ -13,10 +20,11 @@ const issue = YTApp.entity;
 const AppComponent: React.FunctionComponent = () => {
   const [settings, setSettings] = useState<Settings>({});
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
-  const [followSettings, setFollowSettings] = useState<FollowSettings>({
-    followUpstream: true,
-    followDownstream: false,
-  });
+  const [graphLoadSettings, setGraphLoadSettings] =
+    useState<GraphLoadSettings>(defaultGraphLoadSettings);
+  const [graphViewSettings, setGraphViewSettings] =
+    useState<GraphViewSettings>(defaultGraphViewSettings);
+  const [note, setNote] = useState<NoteProps | null>(null);
 
   useMemo(() => {
     if (!graphVisible && settings?.autoLoadDeps) {
@@ -31,10 +39,50 @@ const AppComponent: React.FunctionComponent = () => {
       console.log("Got settings", newSettings);
       setSettings(newSettings);
     });
+    host
+      .fetchApp<{
+        graphContext: GraphContext;
+      }>("global-backend/context", { scope: false })
+      .then((resp) => {
+        const graphContext = resp.graphContext;
+        console.log("Got graph context", graphContext);
+        if (graphContext?.followSettings) {
+          setGraphLoadSettings((prev) => ({
+            ...prev,
+            followSettings: {
+              ...prev.followSettings,
+              ...graphContext.followSettings,
+            },
+          }));
+        }
+        if (graphContext?.layoutOptions || graphContext?.nodeLabelOptions) {
+          setGraphViewSettings((prev) => ({
+            ...prev,
+            layoutOptions: {
+              ...prev.layoutOptions,
+              ...graphContext?.layoutOptions,
+            },
+            nodeLabelOptions: {
+              ...prev.nodeLabelOptions,
+              ...graphContext?.nodeLabelOptions,
+            },
+          }));
+        }
+      });
   }, [host]);
 
   return (
     <div className="widget">
+      {note !== null && (
+        <Alert
+          className="alert-note"
+          type={note.type}
+          timeout={note?.timeout}
+          onCloseRequest={() => setNote(null)}
+        >
+          {note.message}
+        </Alert>
+      )}
       {!graphVisible && settings && (
         <div>
           <Grid>
@@ -47,9 +95,15 @@ const AppComponent: React.FunctionComponent = () => {
                   <Row start={"xs"} middle={"xs"}>
                     <Toggle
                       size={ToggleSize.Size14}
-                      checked={followSettings.followUpstream}
+                      checked={graphLoadSettings.followSettings?.followUpstream}
                       onChange={(e: any) =>
-                        setFollowSettings({ ...followSettings, followUpstream: e.target.checked })
+                        setGraphLoadSettings((prev) => ({
+                          ...prev,
+                          followSettings: {
+                            ...prev.followSettings,
+                            followUpstream: e.target.checked,
+                          },
+                        }))
                       }
                     >
                       Follow upstream (find issues that this issue depends on).
@@ -58,9 +112,15 @@ const AppComponent: React.FunctionComponent = () => {
                   <Row start={"xs"} middle={"xs"}>
                     <Toggle
                       size={ToggleSize.Size14}
-                      checked={followSettings.followDownstream}
+                      checked={graphLoadSettings.followSettings?.followDownstream}
                       onChange={(e: any) =>
-                        setFollowSettings({ ...followSettings, followDownstream: e.target.checked })
+                        setGraphLoadSettings((prev) => ({
+                          ...prev,
+                          followSettings: {
+                            ...prev.followSettings,
+                            followDownstream: e.target.checked,
+                          },
+                        }))
                       }
                     >
                       Follow downstream (find issues that depends on this issue).
@@ -71,7 +131,10 @@ const AppComponent: React.FunctionComponent = () => {
             </Row>
             <Row start={"xs"} middle={"xs"}>
               <Col>
-                <Button inline onClick={() => openGraphPage(issue.id, settings, followSettings)}>
+                <Button
+                  inline
+                  onClick={() => openGraphPage(issue.id, graphLoadSettings, graphViewSettings)}
+                >
                   Open graph in full-screen page...
                 </Button>
               </Col>
@@ -83,8 +146,11 @@ const AppComponent: React.FunctionComponent = () => {
         <IssueDeps
           issueId={issue.id}
           settings={settings}
-          followSettings={followSettings}
-          setFollowSettings={setFollowSettings}
+          graphLoadSettings={graphLoadSettings}
+          setGraphLoadSettings={setGraphLoadSettings}
+          graphViewSettings={graphViewSettings}
+          setGraphViewSettings={setGraphViewSettings}
+          setNote={setNote}
           useDynamicGraphHeight={true}
         />
       )}

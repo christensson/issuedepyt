@@ -19,11 +19,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
 import type { FollowSettings } from "../../../@types/follow-settings";
-import type {
-  HierarchicalDirection,
-  LayoutOptions,
-  NodeLabelOptions,
-} from "../../../@types/graph-view-settings";
+import { GraphContext, GraphLoadSettings } from "../../../@types/graph-context";
+import type { GraphViewSettings, HierarchicalDirection } from "../../../@types/graph-view-settings";
+import { createErrorNote, createSuccessNote, NoteProps } from "../../../@types/note";
 import type { Settings } from "../../../@types/settings";
 import { host } from "../global/ytApp";
 import { openGraphPage } from "../issuedepyt-page/open-page";
@@ -33,6 +31,7 @@ import exportData from "./export";
 import type { FollowDirection, FollowDirections } from "./fetch-deps";
 import { fetchDeps, fetchDepsAndExtend, fetchIssueAndInfo } from "./fetch-deps";
 import FilterDropdownMenu, { createFilterState } from "./filter-dropdown-menu";
+import { storeContextGraphSettings } from "./graph-context-ops";
 import IssueInfoCard from "./issue-info-card";
 import type { DirectionType, IssueInfo, IssueLink, Relation, Relations } from "./issue-types";
 import OptionsDropdownMenu from "./options-dropdown-menu";
@@ -42,16 +41,17 @@ import VerticalSizeControl from "./vertical-size-control";
 interface IssueDepsProps {
   issueId: string;
   settings: Settings;
-  followSettings: FollowSettings;
-  setFollowSettings: React.Dispatch<React.SetStateAction<FollowSettings>>;
+  graphLoadSettings: GraphLoadSettings;
+  setGraphLoadSettings: React.Dispatch<React.SetStateAction<GraphLoadSettings>>;
+  graphViewSettings: GraphViewSettings;
+  setGraphViewSettings: React.Dispatch<React.SetStateAction<GraphViewSettings>>;
+  setNote: React.Dispatch<React.SetStateAction<NoteProps | null>>;
   isSinglePageApp?: boolean;
   useDynamicGraphHeight?: boolean;
 }
 
 const DEFAULT_MAX_DEPTH = 6;
 const DEFAULT_MAX_NODE_WIDTH = 200;
-const DEFAULT_USE_HIERARCHICAL_LAYOUT = false;
-const DEFAULT_USE_ALTERNATE_TREE_LAYOUT = false;
 
 const GRAPH_HEIGHT_MARGIN = 40;
 const GRAPH_CONTROLS_HEIGHT_MIN_VALUE = 200;
@@ -132,8 +132,11 @@ const getRelations = (settings: Settings): Relations | null => {
 const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   issueId,
   settings,
-  followSettings,
-  setFollowSettings,
+  graphLoadSettings,
+  setGraphLoadSettings,
+  graphViewSettings,
+  setGraphViewSettings,
+  setNote,
   isSinglePageApp = false,
   useDynamicGraphHeight = false,
 }) => {
@@ -148,17 +151,6 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   const [highlightedNodes, setHighlightedNodes] = useState<Array<string> | null>(null);
   const [maxNodeWidth, setMaxNodeWidth] = useState<number>(DEFAULT_MAX_NODE_WIDTH);
   const [maxDepth, setMaxDepth] = useState<number>(DEFAULT_MAX_DEPTH);
-  const [nodeLabelOptions, setNodeLabelOptions] = useState<NodeLabelOptions>({
-    showSummary: true,
-    showFlags: true,
-    showType: true,
-  });
-  const [layoutOptions, setLayoutOptions] = useState<LayoutOptions>({
-    hierarchical: DEFAULT_USE_HIERARCHICAL_LAYOUT,
-    hierarchicalDirection: "TB",
-    alternateTreeLayout: DEFAULT_USE_ALTERNATE_TREE_LAYOUT,
-    horizontalEdgeLabels: false,
-  });
   const [fieldInfo, setFieldInfo] = useState<FieldInfo>({});
   const [issueData, setIssueData] = useState<{ [key: string]: IssueInfo }>({});
   const [filterState, setFilterState] = useState<FilterState>({
@@ -197,7 +189,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   };
 
   const refreshData = useCallback(async () => {
-    const followDirs: FollowDirections = getFollowDirections(followSettings);
+    const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
     if (
       followDirs.length === 0 ||
       (relations.upstream.length === 0 && relations.downstream.length === 0)
@@ -228,13 +220,13 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     setSelectedNode((oldId) => (oldId === null ? issueInfo.id : oldId));
 
     setLoading(false);
-  }, [host, issueId, maxDepth, relations, settings, followSettings, useDynamicGraphHeight]);
+  }, [host, issueId, maxDepth, relations, settings, graphLoadSettings, useDynamicGraphHeight]);
 
   const loadIssueDeps = useCallback(
     async (issueId: string, direction: FollowDirection | null = null) => {
       console.log(`Fetching deps for ${issueId}...`);
       setLoading(true);
-      const followDirs: FollowDirections = getFollowDirections(followSettings);
+      const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
       const issues = await fetchDepsAndExtend(
         host,
         issueId,
@@ -247,7 +239,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       setIssueData(issues);
       setLoading(false);
     },
-    [host, issueData, maxDepth, relations, settings, followSettings],
+    [host, issueData, maxDepth, relations, settings, graphLoadSettings],
   );
 
   const isSelectedNodeAnIssue = (
@@ -278,13 +270,6 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     const newRelations = getRelations(settings);
     if (newRelations) {
       setRelations(newRelations);
-    }
-
-    if (settings?.useHierarchicalLayout != undefined) {
-      setLayoutOptions((prev) => ({
-        ...prev,
-        hierarchical: settings.useHierarchicalLayout || false,
-      }));
     }
   }, [settings]);
 
@@ -427,7 +412,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
             {!isSinglePageApp && (
               <Tooltip title="Open graph in full-screen page..." theme={Theme.LIGHT}>
                 <Button
-                  onClick={() => openGraphPage(issueId, settings, followSettings)}
+                  onClick={() => openGraphPage(issueId, graphLoadSettings, graphViewSettings)}
                   icon={ExpandAllIcon}
                 />
               </Tooltip>
@@ -435,42 +420,77 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
             <OptionsDropdownMenu
               maxDepth={maxDepth}
               maxNodeWidth={maxNodeWidth}
-              useHierarchicalLayout={layoutOptions.hierarchical}
-              useAlternateTreeLayout={layoutOptions.alternateTreeLayout}
-              horizontalEdgeLabels={layoutOptions.horizontalEdgeLabels}
-              followUpstream={followSettings.followUpstream}
-              followDownstream={followSettings.followDownstream}
-              showNodeLabelFlags={nodeLabelOptions.showFlags}
-              showNodeLabelSummary={nodeLabelOptions.showSummary}
-              showNodeLabelType={nodeLabelOptions.showType}
+              useHierarchicalLayout={graphViewSettings.layoutOptions.hierarchical}
+              useAlternateTreeLayout={graphViewSettings.layoutOptions.alternateTreeLayout}
+              horizontalEdgeLabels={graphViewSettings.layoutOptions.horizontalEdgeLabels}
+              followUpstream={graphLoadSettings.followSettings.followUpstream}
+              followDownstream={graphLoadSettings.followSettings.followDownstream}
+              showNodeLabelFlags={graphViewSettings.nodeLabelOptions.showFlags}
+              showNodeLabelSummary={graphViewSettings.nodeLabelOptions.showSummary}
+              showNodeLabelType={graphViewSettings.nodeLabelOptions.showType}
               setMaxDepth={setMaxDepth}
               setMaxNodeWidth={setMaxNodeWidth}
               maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
               setUseHierarchicalLayout={(hierarchical: boolean) =>
-                setLayoutOptions((prev) => ({ ...prev, hierarchical }))
+                setGraphViewSettings((prev) => ({
+                  ...prev,
+                  layoutOptions: { ...prev.layoutOptions, hierarchical },
+                }))
               }
               setUseAlternateTreeLayout={(alternateTreeLayout: boolean) =>
-                setLayoutOptions((prev) => ({ ...prev, alternateTreeLayout }))
+                setGraphViewSettings((prev) => ({
+                  ...prev,
+                  layoutOptions: { ...prev.layoutOptions, alternateTreeLayout },
+                }))
               }
               setHorizontalEdgeLabels={(horizontalEdgeLabels: boolean) =>
-                setLayoutOptions((prev) => ({ ...prev, horizontalEdgeLabels }))
+                setGraphViewSettings((prev) => ({
+                  ...prev,
+                  layoutOptions: { ...prev.layoutOptions, horizontalEdgeLabels },
+                }))
               }
               setFollowUpstream={(followUpstream: boolean) =>
-                setFollowSettings((prev) => ({ ...prev, followUpstream }))
+                setGraphLoadSettings((prev) => ({
+                  ...prev,
+                  followSettings: { ...prev.followSettings, followUpstream },
+                }))
               }
               setFollowDownstream={(followDownstream: boolean) =>
-                setFollowSettings((prev) => ({ ...prev, followDownstream }))
+                setGraphLoadSettings((prev) => ({
+                  ...prev,
+                  followSettings: { ...prev.followSettings, followDownstream },
+                }))
               }
               setShowNodeLabelFlags={(show: boolean) =>
-                setNodeLabelOptions((prev) => ({ ...prev, showFlags: show }))
+                setGraphViewSettings((prev) => ({
+                  ...prev,
+                  nodeLabelOptions: { ...prev.nodeLabelOptions, showFlags: show },
+                }))
               }
               setShowNodeLabelSummary={(show: boolean) =>
-                setNodeLabelOptions((prev) => ({ ...prev, showSummary: show }))
+                setGraphViewSettings((prev) => ({
+                  ...prev,
+                  nodeLabelOptions: { ...prev.nodeLabelOptions, showSummary: show },
+                }))
               }
               setShowNodeLabelType={(show: boolean) =>
-                setNodeLabelOptions((prev) => ({ ...prev, showType: show }))
+                setGraphViewSettings((prev) => ({
+                  ...prev,
+                  nodeLabelOptions: { ...prev.nodeLabelOptions, showType: show },
+                }))
               }
               onExportData={() => exportData(issueId, issueData)}
+              onSaveContext={async () => {
+                const success = await storeContextGraphSettings(
+                  graphLoadSettings,
+                  graphViewSettings,
+                );
+                if (success) {
+                  setNote(createSuccessNote("Settings saved!", 5000));
+                } else {
+                  setNote(createErrorNote("Failed to save settings."));
+                }
+              }}
             />
           </Group>
         </span>
@@ -494,8 +514,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           fieldInfo={fieldInfo}
           filterState={filterState}
           maxNodeWidth={maxNodeWidth}
-          nodeLabelOptions={nodeLabelOptions}
-          layoutOptions={layoutOptions}
+          graphViewSettings={graphViewSettings}
           setSelectedNode={selectNode}
           onOpenNode={openNode}
         >
@@ -504,21 +523,27 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <Toggle
                   size={ToggleSize.Size14}
-                  checked={layoutOptions.hierarchical}
+                  checked={graphViewSettings.layoutOptions.hierarchical}
                   onChange={(e: any) =>
-                    setLayoutOptions((prev) => ({ ...prev, hierarchical: e.target.checked }))
+                    setGraphViewSettings((prev) => ({
+                      ...prev,
+                      layoutOptions: { ...prev.layoutOptions, hierarchical: e.target.checked },
+                    }))
                   }
                 >
                   Tree layout
                 </Toggle>
-                {layoutOptions.hierarchical && (
+                {graphViewSettings.layoutOptions.hierarchical && (
                   <Toggle
                     size={ToggleSize.Size14}
-                    checked={layoutOptions.alternateTreeLayout}
+                    checked={graphViewSettings.layoutOptions.alternateTreeLayout}
                     onChange={(e: any) =>
-                      setLayoutOptions((prev) => ({
+                      setGraphViewSettings((prev) => ({
                         ...prev,
-                        alternateTreeLayout: e.target.checked,
+                        layoutOptions: {
+                          ...prev.layoutOptions,
+                          alternateTreeLayout: e.target.checked,
+                        },
                       }))
                     }
                   >
@@ -527,27 +552,33 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 )}
                 <Toggle
                   size={ToggleSize.Size14}
-                  checked={layoutOptions.horizontalEdgeLabels}
+                  checked={graphViewSettings.layoutOptions.horizontalEdgeLabels}
                   onChange={(e: any) =>
-                    setLayoutOptions((prev) => ({
+                    setGraphViewSettings((prev) => ({
                       ...prev,
-                      horizontalEdgeLabels: e.target.checked,
+                      layoutOptions: {
+                        ...prev.layoutOptions,
+                        horizontalEdgeLabels: e.target.checked,
+                      },
                     }))
                   }
                 >
                   Horizontal edge labels
                 </Toggle>
-                {layoutOptions.hierarchical && (
+                {graphViewSettings.layoutOptions.hierarchical && (
                   <Select
                     data={treeDirectionSelectItems}
                     selected={treeDirectionSelectItems.find(
-                      (item) => item.key === layoutOptions.hierarchicalDirection,
+                      (item) => item.key === graphViewSettings.layoutOptions.hierarchicalDirection,
                     )}
                     onSelect={(selected: SelectItem<{ key: HierarchicalDirection }> | null) => {
                       if (!selected) return;
-                      setLayoutOptions((prev) => ({
+                      setGraphViewSettings((prev) => ({
                         ...prev,
-                        hierarchicalDirection: selected.key,
+                        layoutOptions: {
+                          ...prev.layoutOptions,
+                          hierarchicalDirection: selected.key,
+                        },
                       }));
                     }}
                     type={Select.Type.INLINE}
@@ -556,16 +587,19 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 <Toggle
                   size={ToggleSize.Size14}
                   checked={
-                    !nodeLabelOptions.showType &&
-                    !nodeLabelOptions.showSummary &&
-                    !nodeLabelOptions.showFlags
+                    !graphViewSettings.nodeLabelOptions.showType &&
+                    !graphViewSettings.nodeLabelOptions.showSummary &&
+                    !graphViewSettings.nodeLabelOptions.showFlags
                   }
                   onChange={(e: any) =>
-                    setNodeLabelOptions((prev) => ({
+                    setGraphViewSettings((prev) => ({
                       ...prev,
-                      showType: !e.target.checked,
-                      showSummary: !e.target.checked,
-                      showFlags: !e.target.checked,
+                      nodeLabelOptions: {
+                        ...prev.nodeLabelOptions,
+                        showType: !e.target.checked,
+                        showSummary: !e.target.checked,
+                        showFlags: !e.target.checked,
+                      },
                     }))
                   }
                 >
@@ -573,27 +607,36 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 </Toggle>
                 <Toggle
                   size={ToggleSize.Size14}
-                  checked={nodeLabelOptions.showType}
+                  checked={graphViewSettings.nodeLabelOptions.showType}
                   onChange={(e: any) =>
-                    setNodeLabelOptions((prev) => ({ ...prev, showType: e.target.checked }))
+                    setGraphViewSettings((prev) => ({
+                      ...prev,
+                      nodeLabelOptions: { ...prev.nodeLabelOptions, showType: e.target.checked },
+                    }))
                   }
                 >
                   Ticket types
                 </Toggle>
                 <Toggle
                   size={ToggleSize.Size14}
-                  checked={nodeLabelOptions.showSummary}
+                  checked={graphViewSettings.nodeLabelOptions.showSummary}
                   onChange={(e: any) =>
-                    setNodeLabelOptions((prev) => ({ ...prev, showSummary: e.target.checked }))
+                    setGraphViewSettings((prev) => ({
+                      ...prev,
+                      nodeLabelOptions: { ...prev.nodeLabelOptions, showSummary: e.target.checked },
+                    }))
                   }
                 >
                   Ticket summary
                 </Toggle>
                 <Toggle
                   size={ToggleSize.Size14}
-                  checked={nodeLabelOptions.showFlags}
+                  checked={graphViewSettings.nodeLabelOptions.showFlags}
                   onChange={(e: any) =>
-                    setNodeLabelOptions((prev) => ({ ...prev, showFlags: e.target.checked }))
+                    setGraphViewSettings((prev) => ({
+                      ...prev,
+                      nodeLabelOptions: { ...prev.nodeLabelOptions, showFlags: e.target.checked },
+                    }))
                   }
                 >
                   Ticket attributes

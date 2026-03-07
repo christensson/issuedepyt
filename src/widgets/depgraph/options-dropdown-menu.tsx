@@ -31,6 +31,7 @@ interface OptionsDropdownMenuProps {
   setShowNodeLabelSummary: (show: boolean) => void;
   setShowNodeLabelType: (show: boolean) => void;
   onExportData: () => void;
+  onSaveContext: () => void;
 }
 
 const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = ({
@@ -56,6 +57,7 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
   setShowNodeLabelSummary,
   setShowNodeLabelType,
   onExportData,
+  onSaveContext,
 }) => {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -187,7 +189,15 @@ const OptionsDropdownMenu: React.FunctionComponent<OptionsDropdownMenuProps> = (
         },
         {
           rgItemType: DropdownMenu.ListProps.Type.TITLE,
-          label: "Export",
+          label: "Operations",
+        },
+        {
+          rgItemType: DropdownMenu.ListProps.Type.CUSTOM,
+          template: (
+            <Button inline onClick={() => onSaveContext()}>
+              Save settings
+            </Button>
+          ),
         },
         {
           rgItemType: DropdownMenu.ListProps.Type.CUSTOM,

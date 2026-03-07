@@ -17,7 +17,11 @@ import fcose from "cytoscape-fcose";
 // @ts-ignore - No TypeScript definitions available
 import type { FieldInfo, FieldInfoField } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
-import type { LayoutOptions, NodeLabelOptions } from "../../../@types/graph-view-settings";
+import type {
+  GraphViewSettings,
+  LayoutOptions,
+  NodeLabelOptions,
+} from "../../../@types/graph-view-settings";
 import { Color, ColorPaletteItem, hexToRgb, rgbToHex } from "./colors";
 import { filterIssues } from "./issue-helpers";
 import type { IssueInfo, IssueLink } from "./issue-types";
@@ -36,8 +40,7 @@ interface DepGraphProps extends React.PropsWithChildren {
   fieldInfo: FieldInfo;
   filterState: FilterState;
   maxNodeWidth: number | undefined;
-  nodeLabelOptions: NodeLabelOptions;
-  layoutOptions: LayoutOptions;
+  graphViewSettings: GraphViewSettings;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
 }
@@ -273,8 +276,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   fieldInfo,
   filterState,
   maxNodeWidth,
-  nodeLabelOptions,
-  layoutOptions,
+  graphViewSettings,
   setSelectedNode,
   onOpenNode,
   children,
@@ -351,7 +353,9 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   // Initialize Cytoscape.
   useEffect(() => {
     if (containerRef.current && !cyRef.current) {
-      const shortLabel = !nodeLabelOptions.showSummary && !nodeLabelOptions.showFlags;
+      const nodeLabelOpts = graphViewSettings.nodeLabelOptions;
+      const layoutOpts = graphViewSettings.layoutOptions;
+      const shortLabel = !nodeLabelOpts.showSummary && !nodeLabelOpts.showFlags;
       const cy = cytoscape({
         container: containerRef.current,
         elements: [],
@@ -404,7 +408,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               "curve-style": "bezier",
               label: "data(label)",
               "font-size": "11px",
-              "text-rotation": layoutOptions.horizontalEdgeLabels ? 0 : "autorotate",
+              "text-rotation": layoutOpts.horizontalEdgeLabels ? 0 : "autorotate",
               "text-margin-y": 0,
               "text-background-color": "#ffffff",
               "text-background-opacity": 0.8,
@@ -456,9 +460,9 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   }, []);
 
-  const getLayoutOptions = (layoutOptions: LayoutOptions) => {
-    if (layoutOptions.hierarchical) {
-      if (layoutOptions.alternateTreeLayout) {
+  const getLayoutOptions = (layoutOpts: LayoutOptions) => {
+    if (layoutOpts.hierarchical) {
+      if (layoutOpts.alternateTreeLayout) {
         const toDirection = {
           TB: "DOWN",
           BT: "UP",
@@ -468,7 +472,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         return {
           name: "klay",
           klay: {
-            direction: toDirection[layoutOptions.hierarchicalDirection],
+            direction: toDirection[layoutOpts.hierarchicalDirection],
           },
           nodeDimensionsIncludeLabels: true,
           animate: false,
@@ -478,7 +482,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       }
       return {
         name: "dagre",
-        rankDir: layoutOptions.hierarchicalDirection,
+        rankDir: layoutOpts.hierarchicalDirection,
         nodeDimensionsIncludeLabels: true,
         ranker: "network-simplex",
         animate: false,
@@ -511,7 +515,9 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
           height: calcNodeHeight,
         });
       }
-      const shortLabel = !nodeLabelOptions.showSummary && !nodeLabelOptions.showFlags;
+      const nodeLabelOpts = graphViewSettings.nodeLabelOptions;
+      const layoutOpts = graphViewSettings.layoutOptions;
+      const shortLabel = !nodeLabelOpts.showSummary && !nodeLabelOpts.showFlags;
       Object.assign(nodeStyle, {
         padding: shortLabel ? "5px" : "10px",
       });
@@ -521,12 +527,12 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       cy.style()
         .selector("edge")
         .style({
-          "text-rotation": layoutOptions.horizontalEdgeLabels ? 0 : "autorotate",
+          "text-rotation": layoutOpts.horizontalEdgeLabels ? 0 : "autorotate",
         })
         .update();
 
       // Run layout.
-      const cyLayoutOpts = getLayoutOptions(layoutOptions);
+      const cyLayoutOpts = getLayoutOptions(layoutOpts);
       const layout = cy.layout(cyLayoutOpts);
       layout.removeListener("layoutstop");
       layout.on("layoutstop", () => {
@@ -534,7 +540,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       });
       layout.run();
     }
-  }, [maxNodeWidth, layoutOptions, nodeLabelOptions]);
+  }, [maxNodeWidth, graphViewSettings]);
 
   // Update event handlers when callbacks change.
   useEffect(() => {
@@ -563,14 +569,16 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cy = cyRef.current;
       const visibleIssues = filterIssues(filterState, issues);
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
-      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOptions);
+      const nodeLabelOpts = graphViewSettings.nodeLabelOptions;
+      const layoutOpts = graphViewSettings.layoutOptions;
+      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOpts);
 
       // Replace all elements.
       cy.elements().remove();
       cy.add(elements);
 
       // Run layout
-      const cyLayoutOpts = getLayoutOptions(layoutOptions);
+      const cyLayoutOpts = getLayoutOptions(layoutOpts);
       const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
         cy.fit(undefined, GRAPH_PADDING);
@@ -579,7 +587,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, nodeLabelOptions, layoutOptions]);
+  }, [issues, fieldInfo, filterState, graphViewSettings]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {

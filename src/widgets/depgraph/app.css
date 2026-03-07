@@ -322,3 +322,11 @@ div.dep-graph-node-controls {
   display: flex;
   flex-direction: column;
 }
+
+div.alert-note {
+  position: absolute;
+  top: var(--ring-unit);
+  left: 50%;
+  /*transform: translateX(-50%);*/
+  z-index: 3;
+}

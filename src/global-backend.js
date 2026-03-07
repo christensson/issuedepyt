@@ -25,11 +25,27 @@ exports.httpHandler = {
           downstreamRelations: props.downstreamRelations,
           // Global settings are available in ctx.settings.
           autoLoadDeps: ctx.settings.autoLoadDeps,
-          useHierarchicalLayout: ctx.settings.useHierarchicalLayout,
           maxRecursionDepth: ctx.settings.maxRecursionDepth,
         };
         const graphContext = props.graphContext ? JSON.parse(props.graphContext) : {};
         ctx.response.json({ issueId: issueId, settings: settings, graphContext: graphContext });
+      },
+    },
+    {
+      method: "POST",
+      path: "storeGraphContext",
+      scope: "global",
+      handle: function handle(ctx) {
+        const body = JSON.parse(ctx.request.body);
+        const resp = {};
+
+        // Store context in user extension properties.
+        if (body?.graphContext) {
+          const graphContext = body.graphContext || {};
+          ctx.currentUser.extensionProperties.graphContext = JSON.stringify(graphContext);
+        }
+        resp.success = true;
+        ctx.response.json(resp);
       },
     },
   ],
