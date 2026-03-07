@@ -71,7 +71,7 @@ const AppComponent: React.FunctionComponent = () => {
             </Row>
             <Row start={"xs"} middle={"xs"}>
               <Col>
-                <Button inline onClick={() => openGraphPage(issue.id, settings)}>
+                <Button inline onClick={() => openGraphPage(issue.id, settings, followSettings)}>
                   Open graph in full-screen page...
                 </Button>
               </Col>

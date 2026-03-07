@@ -7,6 +7,10 @@
           "type": "string",
           "multi": false
         },
+        "graphContext": {
+          "type": "string",
+          "multi": false
+        },
         "typeField": {
           "type": "string",
           "multi": false

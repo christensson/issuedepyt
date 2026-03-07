@@ -17,8 +17,11 @@ exports.httpHandler = {
       handle: function handle(ctx) {
         const body = JSON.parse(ctx.request.body);
         const settings = ctx.settings;
+        const graphContext = body.graphContext || {};
         // Store context in user extension properties.
         ctx.currentUser.extensionProperties.issueId = body.issueId;
+        ctx.currentUser.extensionProperties.graphContext = JSON.stringify(graphContext);
+        ctx.currentUser.extensionProperties.typeField = settings.typeField;
         ctx.currentUser.extensionProperties.typeField = settings.typeField;
         ctx.currentUser.extensionProperties.stateField = settings.stateField;
         ctx.currentUser.extensionProperties.sprintsField = settings.sprintsField;

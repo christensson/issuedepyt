@@ -425,7 +425,10 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
             />
             {!isSinglePageApp && (
               <Tooltip title="Open graph in full-screen page..." theme={Theme.LIGHT}>
-                <Button onClick={() => openGraphPage(issueId, settings)} icon={ExpandAllIcon} />
+                <Button
+                  onClick={() => openGraphPage(issueId, settings, followSettings)}
+                  icon={ExpandAllIcon}
+                />
               </Tooltip>
             )}
             <OptionsDropdownMenu

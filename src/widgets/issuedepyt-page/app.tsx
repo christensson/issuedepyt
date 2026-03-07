@@ -4,6 +4,7 @@ import Link from "@jetbrains/ring-ui-built/components/link/link";
 import Text from "@jetbrains/ring-ui-built/components/text/text";
 import React, { memo, useEffect, useMemo, useState } from "react";
 import type { FollowSettings } from "../../../@types/follow-settings";
+import { GraphContext } from "../../../@types/graph-context";
 import type { Settings } from "../../../@types/settings";
 import IssueDeps from "../depgraph/issue-deps";
 import { host } from "../global/ytApp";
@@ -47,8 +48,17 @@ const AppComponent: React.FunctionComponent = () => {
 
     // Not opened on an issue, fetch context to find the issue ID.
     host
-      .fetchApp<{ issueId: string; settings: Settings }>("global-backend/context", { scope: false })
+      .fetchApp<{
+        issueId: string;
+        settings: Settings;
+        graphContext: GraphContext;
+      }>("global-backend/context", { scope: false })
       .then((resp) => {
+        const graphContext = resp.graphContext;
+        console.log("Got graph context", graphContext);
+        if (graphContext?.followSettings) {
+          setFollowSettings(graphContext.followSettings);
+        }
         const newSettings = resp.settings;
         console.log("Got settings", newSettings);
         setSettings(newSettings);

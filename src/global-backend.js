@@ -14,7 +14,7 @@ exports.httpHandler = {
         const settings = {
           // Load project settings from stored context.
           typeField: props.typeField,
-          stateField:  props.stateField,
+          stateField: props.stateField,
           sprintsField: props.sprintsField,
           assigneeField: props.assigneeField,
           startDateField: props.startDateField,
@@ -27,8 +27,9 @@ exports.httpHandler = {
           autoLoadDeps: ctx.settings.autoLoadDeps,
           useHierarchicalLayout: ctx.settings.useHierarchicalLayout,
           maxRecursionDepth: ctx.settings.maxRecursionDepth,
-        }
-        ctx.response.json({ issueId: issueId, settings: settings });
+        };
+        const graphContext = props.graphContext ? JSON.parse(props.graphContext) : {};
+        ctx.response.json({ issueId: issueId, settings: settings, graphContext: graphContext });
       },
     },
   ],
