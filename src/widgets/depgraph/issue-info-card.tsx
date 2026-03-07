@@ -1,15 +1,15 @@
-import React, { useState } from "react";
-import type { IssueInfo, IssueLink, IssuePeriod } from "./issue-types.ts";
-import Island, { Header, Content } from "@jetbrains/ring-ui-built/components/island/island";
+import ChevronDownIcon from "@jetbrains/icons/chevron-down";
+import ChevronUpIcon from "@jetbrains/icons/chevron-up";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
-import Text from "@jetbrains/ring-ui-built/components/text/text";
-import Tag from "@jetbrains/ring-ui-built/components/tag/tag";
-import Link from "@jetbrains/ring-ui-built/components/link/link";
-import { Grid, Row, Col } from "@jetbrains/ring-ui-built/components/grid/grid";
 import Collapse from "@jetbrains/ring-ui-built/components/collapse/collapse";
 import CollapseContent from "@jetbrains/ring-ui-built/components/collapse/collapse-content";
-import ChevronUpIcon from "@jetbrains/icons/chevron-up";
-import ChevronDownIcon from "@jetbrains/icons/chevron-down";
+import { Col, Grid, Row } from "@jetbrains/ring-ui-built/components/grid/grid";
+import Island, { Content, Header } from "@jetbrains/ring-ui-built/components/island/island";
+import Link from "@jetbrains/ring-ui-built/components/link/link";
+import Tag from "@jetbrains/ring-ui-built/components/tag/tag";
+import Text from "@jetbrains/ring-ui-built/components/text/text";
+import React, { useState } from "react";
+import type { IssueInfo, IssueLink, IssuePeriod } from "./issue-types.ts";
 
 interface IssueInfoCardProps {
   issue: IssueInfo;
@@ -47,7 +47,7 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
           tags.push(
             <Tag readOnly>
               <Link href={`/issue/${link.targetId}`}>{link.targetIdReadable}</Link>
-            </Tag>
+            </Tag>,
           );
         }
       }
@@ -55,7 +55,7 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
         <p>
           <Text size={Text.Size.S} info>{`${relation} (${direction})`}</Text>
           <div children={tags} />
-        </p>
+        </p>,
       );
     }
   }
@@ -65,7 +65,7 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
         <Text size={Text.Size.S} info>
           Not all relations known.
         </Text>
-      </p>
+      </p>,
     );
   }
   const toggleCollapse = () => setCollapsed(!collapsed);
@@ -107,9 +107,23 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
           value: <i>No values</i>,
         });
       } else {
+        const formatValue = (x: any) => {
+          if (x instanceof Date) {
+            return x.toDateString();
+          }
+
+          if (x && typeof x === "object" && "name" in x) {
+            const name = (x as { name?: unknown }).name;
+            if (name != null) {
+              return String(name);
+            }
+          }
+
+          return String(x);
+        };
         fields.push({
           name: field.name,
-          value: field.value.map((x) => <Tag readOnly>{x.toString()}</Tag>),
+          value: field.value.map((x) => <Tag readOnly>{formatValue(x)}</Tag>),
         });
       }
     } else {
