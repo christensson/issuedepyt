@@ -73,6 +73,24 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
   const collapseControlText = collapsed ? "Expand" : "Collapse";
   const collapseControlIcon = collapsed ? ChevronDownIcon : ChevronUpIcon;
 
+  const formatValue = (x: any) => {
+    if (x instanceof Date) {
+      return x.toDateString();
+    }
+
+    if (x && typeof x === "object") {
+      for (const attr of ["presentation", "name"]) {
+        if (attr in x) {
+          const val = (x as { [key: string]: unknown })[attr];
+          if (val != null) {
+            return String(val);
+          }
+        }
+      }
+    }
+    return String(x);
+  };
+
   const fields = [];
   if (issue?.type != undefined) {
     fields.push({ name: "Type", value: issue.type });
@@ -84,7 +102,7 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
     fields.push({ name: "Assignee", value: issue.assignee });
   }
   if (issue?.sprints && issue.sprints.length > 0) {
-    fields.push({ name: "Sprints", value: issue.sprints.map((x) => x.name).join(", ") });
+    fields.push({ name: "Sprints", value: issue.sprints.map(formatValue).join(", ") });
   }
   if (issue?.startDate) {
     fields.push({ name: "Start Date", value: issue.startDate.toDateString() });
@@ -93,7 +111,7 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
     fields.push({ name: "Due Date", value: issue.dueDate.toDateString() });
   }
   if (issue?.estimation) {
-    fields.push({ name: "Estimation", value: (issue.estimation as IssuePeriod)?.presentation });
+    fields.push({ name: "Estimation", value: formatValue(issue.estimation as IssuePeriod) });
   }
   for (const field of issue.extraFields) {
     if (field.value == null) {
@@ -107,27 +125,13 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
           value: <i>No values</i>,
         });
       } else {
-        const formatValue = (x: any) => {
-          if (x instanceof Date) {
-            return x.toDateString();
-          }
-
-          if (x && typeof x === "object" && "name" in x) {
-            const name = (x as { name?: unknown }).name;
-            if (name != null) {
-              return String(name);
-            }
-          }
-
-          return String(x);
-        };
         fields.push({
           name: field.name,
           value: field.value.map((x) => <Tag readOnly>{formatValue(x)}</Tag>),
         });
       }
     } else {
-      fields.push({ name: field.name, value: field.value.toString() });
+      fields.push({ name: field.name, value: formatValue(field.value) });
     }
   }
 
