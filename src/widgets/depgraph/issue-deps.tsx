@@ -18,6 +18,7 @@ import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
 import React, { useCallback, useEffect, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
+import type { FollowSettings } from "../../../@types/follow-settings";
 import type { Settings } from "../../../@types/settings";
 import { host } from "../global/ytApp";
 import { openGraphPage } from "../issuedepyt-page/open-page";
@@ -40,10 +41,8 @@ import VerticalSizeControl from "./vertical-size-control";
 interface IssueDepsProps {
   issueId: string;
   settings: Settings;
-  followUpstream: boolean;
-  followDownstream: boolean;
-  setFollowUpstream: (value: boolean) => void;
-  setFollowDownstream: (value: boolean) => void;
+  followSettings: FollowSettings;
+  setFollowSettings: React.Dispatch<React.SetStateAction<FollowSettings>>;
   isSinglePageApp?: boolean;
   useDynamicGraphHeight?: boolean;
 }
@@ -132,10 +131,8 @@ const getRelations = (settings: Settings): Relations | null => {
 const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   issueId,
   settings,
-  followUpstream,
-  followDownstream,
-  setFollowUpstream,
-  setFollowDownstream,
+  followSettings,
+  setFollowSettings,
   isSinglePageApp = false,
   useDynamicGraphHeight = false,
 }) => {
@@ -187,22 +184,19 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
   };
 
-  const getFollowDirections = (
-    followUpstream: boolean,
-    followDownstream: boolean,
-  ): FollowDirections => {
+  const getFollowDirections = (followSettings: FollowSettings): FollowDirections => {
     const followDirs: FollowDirections = [];
-    if (followUpstream) {
+    if (followSettings.followUpstream) {
       followDirs.push("upstream");
     }
-    if (followDownstream) {
+    if (followSettings.followDownstream) {
       followDirs.push("downstream");
     }
     return followDirs;
   };
 
   const refreshData = useCallback(async () => {
-    const followDirs: FollowDirections = getFollowDirections(followUpstream, followDownstream);
+    const followDirs: FollowDirections = getFollowDirections(followSettings);
     if (
       followDirs.length === 0 ||
       (relations.upstream.length === 0 && relations.downstream.length === 0)
@@ -233,22 +227,13 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     setSelectedNode((oldId) => (oldId === null ? issueInfo.id : oldId));
 
     setLoading(false);
-  }, [
-    host,
-    issueId,
-    maxDepth,
-    relations,
-    settings,
-    followUpstream,
-    followDownstream,
-    useDynamicGraphHeight,
-  ]);
+  }, [host, issueId, maxDepth, relations, settings, followSettings, useDynamicGraphHeight]);
 
   const loadIssueDeps = useCallback(
     async (issueId: string, direction: FollowDirection | null = null) => {
       console.log(`Fetching deps for ${issueId}...`);
       setLoading(true);
-      const followDirs: FollowDirections = getFollowDirections(followUpstream, followDownstream);
+      const followDirs: FollowDirections = getFollowDirections(followSettings);
       const issues = await fetchDepsAndExtend(
         host,
         issueId,
@@ -261,7 +246,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       setIssueData(issues);
       setLoading(false);
     },
-    [host, issueData, maxDepth, relations, settings, followUpstream, followDownstream],
+    [host, issueData, maxDepth, relations, settings, followSettings],
   );
 
   const isSelectedNodeAnIssue = (
@@ -449,8 +434,8 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               useHierarchicalLayout={layoutOptions.hierarchical}
               useAlternateTreeLayout={layoutOptions.alternateTreeLayout}
               horizontalEdgeLabels={layoutOptions.horizontalEdgeLabels}
-              followUpstream={followUpstream}
-              followDownstream={followDownstream}
+              followUpstream={followSettings.followUpstream}
+              followDownstream={followSettings.followDownstream}
               showNodeLabelFlags={nodeLabelOptions.showFlags}
               showNodeLabelSummary={nodeLabelOptions.showSummary}
               showNodeLabelType={nodeLabelOptions.showType}
@@ -466,8 +451,12 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               setHorizontalEdgeLabels={(horizontalEdgeLabels: boolean) =>
                 setLayoutOptions((prev) => ({ ...prev, horizontalEdgeLabels }))
               }
-              setFollowUpstream={setFollowUpstream}
-              setFollowDownstream={setFollowDownstream}
+              setFollowUpstream={(followUpstream: boolean) =>
+                setFollowSettings((prev) => ({ ...prev, followUpstream }))
+              }
+              setFollowDownstream={(followDownstream: boolean) =>
+                setFollowSettings((prev) => ({ ...prev, followDownstream }))
+              }
               setShowNodeLabelFlags={(show: boolean) =>
                 setNodeLabelOptions((prev) => ({ ...prev, showFlags: show }))
               }
@@ -612,7 +601,8 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 title={
                   graphNodeControlsOpen
                     ? undefined
-                    : !graphNodeControlsOpen && graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN
+                    : !graphNodeControlsOpen &&
+                        graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN
                       ? "Increase graph height to expand controls"
                       : "Expand graph controls"
                 }
@@ -620,7 +610,10 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               >
                 <Button
                   inline
-                  disabled={!graphNodeControlsOpen && graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN}
+                  disabled={
+                    !graphNodeControlsOpen &&
+                    graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN
+                  }
                   onClick={() => setGraphNodeControlsOpen((prev) => !prev)}
                   iconRight={graphNodeControlsOpen ? DoubleChevronRight : DoubleChevronLeft}
                   ghost

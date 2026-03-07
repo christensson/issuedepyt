@@ -1,11 +1,12 @@
-import React, { memo, useMemo, useState, useEffect } from "react";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
-import { Grid, Row, Col } from "@jetbrains/ring-ui-built/components/grid/grid";
+import { Col, Grid, Row } from "@jetbrains/ring-ui-built/components/grid/grid";
+import Link from "@jetbrains/ring-ui-built/components/link/link";
 import Text from "@jetbrains/ring-ui-built/components/text/text";
-import { host } from "../global/ytApp";
+import React, { memo, useEffect, useMemo, useState } from "react";
+import type { FollowSettings } from "../../../@types/follow-settings";
 import type { Settings } from "../../../@types/settings";
 import IssueDeps from "../depgraph/issue-deps";
-import Link from "@jetbrains/ring-ui-built/components/link/link";
+import { host } from "../global/ytApp";
 import OpenIssueDialog from "./open-issue-dialog";
 
 const entity = YTApp.entity;
@@ -16,8 +17,10 @@ const AppComponent: React.FunctionComponent = () => {
   );
   const [settings, setSettings] = useState<Settings>({});
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
-  const [followUpstream, setFollowUpstream] = useState<boolean>(true);
-  const [followDownstream, setFollowDownstream] = useState<boolean>(false);
+  const [followSettings, setFollowSettings] = useState<FollowSettings>({
+    followUpstream: true,
+    followDownstream: false,
+  });
   const [openIssueVisible, setOpenIssueVisible] = useState<boolean>(false);
 
   useEffect(() => {
@@ -89,10 +92,8 @@ const AppComponent: React.FunctionComponent = () => {
           <IssueDeps
             issueId={issueId}
             settings={settings}
-            followUpstream={followUpstream}
-            followDownstream={followDownstream}
-            setFollowUpstream={setFollowUpstream}
-            setFollowDownstream={setFollowDownstream}
+            followSettings={followSettings}
+            setFollowSettings={setFollowSettings}
             isSinglePageApp={true}
           />
         </div>

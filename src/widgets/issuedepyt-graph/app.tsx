@@ -1,11 +1,11 @@
-import React, { memo, useMemo, useState, useEffect } from "react";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
-import { Grid, Row, Col } from "@jetbrains/ring-ui-built/components/grid/grid";
-import Toggle from "@jetbrains/ring-ui-built/components/toggle/toggle";
-import { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
-import { host } from "../global/ytApp";
+import { Col, Grid, Row } from "@jetbrains/ring-ui-built/components/grid/grid";
+import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
+import React, { memo, useEffect, useMemo, useState } from "react";
+import type { FollowSettings } from "../../../@types/follow-settings";
 import type { Settings } from "../../../@types/settings";
 import IssueDeps from "../depgraph/issue-deps";
+import { host } from "../global/ytApp";
 import { openGraphPage } from "../issuedepyt-page/open-page";
 
 const issue = YTApp.entity;
@@ -13,8 +13,10 @@ const issue = YTApp.entity;
 const AppComponent: React.FunctionComponent = () => {
   const [settings, setSettings] = useState<Settings>({});
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
-  const [followUpstream, setFollowUpstream] = useState<boolean>(true);
-  const [followDownstream, setFollowDownstream] = useState<boolean>(false);
+  const [followSettings, setFollowSettings] = useState<FollowSettings>({
+    followUpstream: true,
+    followDownstream: false,
+  });
 
   useMemo(() => {
     if (!graphVisible && settings?.autoLoadDeps) {
@@ -45,8 +47,10 @@ const AppComponent: React.FunctionComponent = () => {
                   <Row start={"xs"} middle={"xs"}>
                     <Toggle
                       size={ToggleSize.Size14}
-                      checked={followUpstream}
-                      onChange={(e: any) => setFollowUpstream(e.target.checked)}
+                      checked={followSettings.followUpstream}
+                      onChange={(e: any) =>
+                        setFollowSettings({ ...followSettings, followUpstream: e.target.checked })
+                      }
                     >
                       Follow upstream (find issues that this issue depends on).
                     </Toggle>
@@ -54,8 +58,10 @@ const AppComponent: React.FunctionComponent = () => {
                   <Row start={"xs"} middle={"xs"}>
                     <Toggle
                       size={ToggleSize.Size14}
-                      checked={followDownstream}
-                      onChange={(e: any) => setFollowDownstream(e.target.checked)}
+                      checked={followSettings.followDownstream}
+                      onChange={(e: any) =>
+                        setFollowSettings({ ...followSettings, followDownstream: e.target.checked })
+                      }
                     >
                       Follow downstream (find issues that depends on this issue).
                     </Toggle>
@@ -77,10 +83,8 @@ const AppComponent: React.FunctionComponent = () => {
         <IssueDeps
           issueId={issue.id}
           settings={settings}
-          followUpstream={followUpstream}
-          followDownstream={followDownstream}
-          setFollowUpstream={setFollowUpstream}
-          setFollowDownstream={setFollowDownstream}
+          followSettings={followSettings}
+          setFollowSettings={setFollowSettings}
           useDynamicGraphHeight={true}
         />
       )}
