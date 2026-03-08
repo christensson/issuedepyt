@@ -11,6 +11,7 @@ export type LayoutOptions = {
   alternateTreeLayout: boolean;
   hierarchicalDirection: HierarchicalDirection;
   horizontalEdgeLabels: boolean;
+  maxNodeWidth: number;
 };
 
 export type GraphViewSettings = {
@@ -24,6 +25,7 @@ export const defaultGraphViewSettings: GraphViewSettings = {
     hierarchicalDirection: "TB",
     alternateTreeLayout: false,
     horizontalEdgeLabels: true,
+    maxNodeWidth: 200,
   },
   nodeLabelOptions: {
     showSummary: true,

@@ -39,7 +39,6 @@ interface DepGraphProps extends React.PropsWithChildren {
   highlightedIssueIds: string[] | null;
   fieldInfo: FieldInfo;
   filterState: FilterState;
-  maxNodeWidth: number | undefined;
   graphViewSettings: GraphViewSettings;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
@@ -275,7 +274,6 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   highlightedIssueIds,
   fieldInfo,
   filterState,
-  maxNodeWidth,
   graphViewSettings,
   setSelectedNode,
   onOpenNode,
@@ -377,7 +375,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               padding: shortLabel ? "5px" : "10px",
               width: calcNodeWidth,
               height: calcNodeHeight,
-              "text-max-width": maxNodeWidth ? `${maxNodeWidth}px` : "200px",
+              "text-max-width": layoutOpts.maxNodeWidth ? `${layoutOpts.maxNodeWidth}px` : "200px",
               shape: "round-rectangle",
             } as Css.Node,
           },
@@ -507,16 +505,16 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cy = cyRef.current;
 
       const nodeStyle: Css.Node = {};
+      const nodeLabelOpts = graphViewSettings.nodeLabelOptions;
+      const layoutOpts = graphViewSettings.layoutOptions;
       // Update max width.
-      if (maxNodeWidth) {
+      if (layoutOpts.maxNodeWidth) {
         Object.assign(nodeStyle, {
-          "text-max-width": `${maxNodeWidth}px`,
+          "text-max-width": `${layoutOpts.maxNodeWidth}px`,
           width: calcNodeWidth,
           height: calcNodeHeight,
         });
       }
-      const nodeLabelOpts = graphViewSettings.nodeLabelOptions;
-      const layoutOpts = graphViewSettings.layoutOptions;
       const shortLabel = !nodeLabelOpts.showSummary && !nodeLabelOpts.showFlags;
       Object.assign(nodeStyle, {
         padding: shortLabel ? "5px" : "10px",
@@ -540,7 +538,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       });
       layout.run();
     }
-  }, [maxNodeWidth, graphViewSettings]);
+  }, [graphViewSettings]);
 
   // Update event handlers when callbacks change.
   useEffect(() => {

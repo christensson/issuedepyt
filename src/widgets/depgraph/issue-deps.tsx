@@ -51,7 +51,6 @@ interface IssueDepsProps {
 }
 
 const DEFAULT_MAX_DEPTH = 6;
-const DEFAULT_MAX_NODE_WIDTH = 200;
 
 const GRAPH_HEIGHT_MARGIN = 40;
 const GRAPH_CONTROLS_HEIGHT_MIN_VALUE = 200;
@@ -149,7 +148,6 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [graphHeight, setGraphHeight] = useState<number>(400);
   const [highlightedNodes, setHighlightedNodes] = useState<Array<string> | null>(null);
-  const [maxNodeWidth, setMaxNodeWidth] = useState<number>(DEFAULT_MAX_NODE_WIDTH);
   const [maxDepth, setMaxDepth] = useState<number>(DEFAULT_MAX_DEPTH);
   const [fieldInfo, setFieldInfo] = useState<FieldInfo>({});
   const [issueData, setIssueData] = useState<{ [key: string]: IssueInfo }>({});
@@ -419,7 +417,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
             )}
             <OptionsDropdownMenu
               maxDepth={maxDepth}
-              maxNodeWidth={maxNodeWidth}
+              maxNodeWidth={graphViewSettings.layoutOptions.maxNodeWidth}
               useHierarchicalLayout={graphViewSettings.layoutOptions.hierarchical}
               useAlternateTreeLayout={graphViewSettings.layoutOptions.alternateTreeLayout}
               horizontalEdgeLabels={graphViewSettings.layoutOptions.horizontalEdgeLabels}
@@ -429,7 +427,12 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               showNodeLabelSummary={graphViewSettings.nodeLabelOptions.showSummary}
               showNodeLabelType={graphViewSettings.nodeLabelOptions.showType}
               setMaxDepth={setMaxDepth}
-              setMaxNodeWidth={setMaxNodeWidth}
+              setMaxNodeWidth={(maxNodeWidth: number) =>
+                setGraphViewSettings((prev) => ({
+                  ...prev,
+                  layoutOptions: { ...prev.layoutOptions, maxNodeWidth },
+                }))
+              }
               maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
               setUseHierarchicalLayout={(hierarchical: boolean) =>
                 setGraphViewSettings((prev) => ({
@@ -512,7 +515,6 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           highlightedIssueIds={highlightedNodes}
           fieldInfo={fieldInfo}
           filterState={filterState}
-          maxNodeWidth={maxNodeWidth}
           graphViewSettings={graphViewSettings}
           setSelectedNode={selectNode}
           onOpenNode={openNode}
