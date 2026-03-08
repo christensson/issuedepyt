@@ -501,7 +501,6 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           selectedIssueId={selectedNode}
           fieldInfo={fieldInfo}
           filterState={filterState}
-          maxNodeWidth={maxNodeWidth}
           setSelectedNode={selectNode}
           onOpenNode={openNode}
         />

@@ -29,7 +29,6 @@ interface DepTimelineProps {
   selectedIssueId: string | null;
   fieldInfo: FieldInfo;
   filterState: FilterState;
-  maxNodeWidth: number | undefined;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
 }
@@ -55,7 +54,7 @@ const getTooltip = (issue: IssueInfo, isOverdue: boolean): string => {
     } else {
       // Due date is future.
       lines.push(
-        `Due date is in ${daysToDueDate} day${maybeS} on ${issue.dueDate.toDateString()}.`
+        `Due date is in ${daysToDueDate} day${maybeS} on ${issue.dueDate.toDateString()}.`,
       );
     }
   }
@@ -66,14 +65,14 @@ const getTooltip = (issue: IssueInfo, isOverdue: boolean): string => {
       const daysAgo = durationToDays(today.getTime()) - durationToDays(issue.startDate.getTime());
       const maybeS = daysAgo > 1 ? "s" : "";
       lines.push(
-        `Start date was ${daysAgo} day${maybeS} ago on ${issue.startDate.toDateString()}.`
+        `Start date was ${daysAgo} day${maybeS} ago on ${issue.startDate.toDateString()}.`,
       );
     } else {
       // Start date is in the future.
       const daysUntil = durationToDays(issue.startDate.getTime()) - durationToDays(today.getTime());
       const maybeS = daysUntil > 1 ? "s" : "";
       lines.push(
-        `Start date is in ${daysUntil} day${maybeS} on ${issue.startDate.toDateString()}.`
+        `Start date is in ${daysUntil} day${maybeS} on ${issue.startDate.toDateString()}.`,
       );
     }
   }
@@ -96,7 +95,6 @@ const DepTimeline: React.FunctionComponent<DepTimelineProps> = ({
   selectedIssueId,
   fieldInfo,
   filterState,
-  maxNodeWidth,
   setSelectedNode,
   onOpenNode,
 }) => {
@@ -157,7 +155,7 @@ const DepTimeline: React.FunctionComponent<DepTimelineProps> = ({
         ...new Set(
           Object.values(issues)
             .map(getGroupIssueId)
-            .filter((x) => x != undefined)
+            .filter((x) => x != undefined),
         ),
       ];
       console.log(`Group issue IDs: ${groupIds.map((x) => issues[x].idReadable).join(", ")}`);
@@ -176,7 +174,7 @@ const DepTimeline: React.FunctionComponent<DepTimelineProps> = ({
         ...groupIds.map((id) => {
           const issue = issues[id];
           const upstreamGroupIssueIds = issue.upstreamLinks.filter((link) =>
-            groupIds.includes(link.targetId)
+            groupIds.includes(link.targetId),
           );
           return {
             id: `${id}-group`,
@@ -190,7 +188,7 @@ const DepTimeline: React.FunctionComponent<DepTimelineProps> = ({
                 ? upstreamGroupIssueIds.map((link) => `${link.targetId}-group`)
                 : undefined,
           };
-        })
+        }),
       );
       groupItems.push({
         id: "no-group",
@@ -208,14 +206,14 @@ const DepTimeline: React.FunctionComponent<DepTimelineProps> = ({
         .filter(
           (id) =>
             groupItems.filter((x) => x.nestedGroups && x.nestedGroups.includes(`${id}-group`))
-              .length === 0
+              .length === 0,
         )
         .map((id) => issues[id])
         // Sort in ascending depth order.
         .sort((a, b) => a.depth - b.depth);
       if (issuesThatAreGroupsWithoutParentGroup.length > 0) {
         const onlyLowestDepth = issuesThatAreGroupsWithoutParentGroup.filter(
-          (issue) => issue.depth === issuesThatAreGroupsWithoutParentGroup[0].depth
+          (issue) => issue.depth === issuesThatAreGroupsWithoutParentGroup[0].depth,
         );
         rootGroup.nestedGroups = onlyLowestDepth.map((issue) => `${issue.id}-group`);
       }
@@ -226,7 +224,7 @@ const DepTimeline: React.FunctionComponent<DepTimelineProps> = ({
         Object.entries(stateColors).map(([k, v]) => [
           k,
           `color: ${v.foreground}; background-color: ${v.background};`,
-        ])
+        ]),
       );
       const timelineItems: Array<TimelineItem> = visibleIssues.map((issue) => {
         const startSymbol = "⇤"; // "↦".
@@ -280,12 +278,12 @@ const DepTimeline: React.FunctionComponent<DepTimelineProps> = ({
       const finalGroupIds = new Set(
         groupItems
           .filter(
-            (x) => nonEmptyGroupIds.has(x.id) || (x.nestedGroups && x.nestedGroups.length > 0)
+            (x) => nonEmptyGroupIds.has(x.id) || (x.nestedGroups && x.nestedGroups.length > 0),
           )
-          .map((x) => x.id)
+          .map((x) => x.id),
       );
       const removedGroupIds = new Set(
-        groupItems.filter((group) => !finalGroupIds.has(group.id)).map((x) => x.id)
+        groupItems.filter((group) => !finalGroupIds.has(group.id)).map((x) => x.id),
       );
       // Determine final group items and adjuste nestedGroups to only include valid groups.
       const finalGroupItems: TimelineGroup[] = groupItems
