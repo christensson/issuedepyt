@@ -357,8 +357,11 @@ div.dep-graph-height-control {
 
 div.alert-note {
   position: absolute;
-  top: var(--ring-unit);
-  left: 50%;
-  /*transform: translateX(-50%);*/
+  top: calc(var(--ring-unit) / 2);
+  left: 0;
+  right: 0;
+  width: max-content;
+  max-width: calc(100% - var(--ring-unit) * 2);
+  margin-inline: auto;
   z-index: 3;
 }

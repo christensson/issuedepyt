@@ -9,10 +9,8 @@ import Checkbox from "@jetbrains/ring-ui-built/components/checkbox/checkbox";
 import Theme from "@jetbrains/ring-ui-built/components/global/theme";
 import Group from "@jetbrains/ring-ui-built/components/group/group";
 import Icon from "@jetbrains/ring-ui-built/components/icon/icon";
-import LoaderInline from "@jetbrains/ring-ui-built/components/loader-inline/loader-inline";
 import type { SelectItem } from "@jetbrains/ring-ui-built/components/select/select";
 import Select from "@jetbrains/ring-ui-built/components/select/select";
-import Text from "@jetbrains/ring-ui-built/components/text/text";
 import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
 import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
 import React, { useCallback, useEffect, useState } from "react";
@@ -21,7 +19,12 @@ import type { FilterState } from "../../../@types/filter-state";
 import type { FollowSettings } from "../../../@types/follow-settings";
 import { GraphLoadSettings } from "../../../@types/graph-context";
 import type { GraphViewSettings, HierarchicalDirection } from "../../../@types/graph-view-settings";
-import { createErrorNote, createSuccessNote, NoteProps } from "../../../@types/note";
+import {
+  createErrorNote,
+  createLoadingNote,
+  createSuccessNote,
+  NoteProps,
+} from "../../../@types/note";
 import type { Settings } from "../../../@types/settings";
 import { host } from "../global/ytApp";
 import { openGraphPage } from "../issuedepyt-page/open-page";
@@ -143,7 +146,6 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   isSinglePageApp = false,
   useDynamicGraphHeight = false,
 }) => {
-  const [loading, setLoading] = useState<boolean>(true);
   const [relations, setRelations] = useState<Relations>({
     upstream: [],
     downstream: [],
@@ -196,7 +198,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       console.log(`Not fetching deps for root ${issueId}, no directions or relations yet...`);
       return;
     }
-    setLoading(true);
+    setNote(createLoadingNote("Loading dependencies..."));
     console.log(`Fetching deps for root ${issueId}...`);
 
     const { issue: issueInfo, fieldInfo: fieldInfoData } = await fetchIssueAndInfo(
@@ -218,13 +220,13 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     // Set selected node to the root issue if none selected already.
     setSelectedNode((oldId) => (oldId === null ? issueInfo.id : oldId));
 
-    setLoading(false);
+    setNote(null);
   }, [host, issueId, maxDepth, relations, settings, graphLoadSettings, useDynamicGraphHeight]);
 
   const loadIssueDeps = useCallback(
     async (issueId: string, direction: FollowDirection | null = null) => {
       console.log(`Fetching deps for ${issueId}...`);
-      setLoading(true);
+      setNote(createLoadingNote("Loading dependencies..."));
       const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
       const issues = await fetchDepsAndExtend(
         host,
@@ -236,7 +238,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
         settings,
       );
       setIssueData(issues);
-      setLoading(false);
+      setNote(null);
     },
     [host, issueData, maxDepth, relations, settings, graphLoadSettings],
   );
@@ -297,14 +299,11 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
 
   return (
     <div>
+      {Object.keys(issueData).length === 0 && (
+        // Reserve space on initial load since note is shown absolute at top.
+        <div style={{ height: "80px" }} />
+      )}
       <div className="dep-toolbar">
-        {loading && (
-          <LoaderInline>
-            <Text size={Text.Size.S} info>
-              Loading...
-            </Text>
-          </LoaderInline>
-        )}
         {selectedNode !== null && selectedNode in issueData && (
           <Group>
             <Button href={`/issue/${selectedNode}`}>
@@ -380,13 +379,9 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
             </Tooltip>
             <span className="extra-margin-left">
               <Tooltip
-                title={
-                  loading
-                    ? "Loading..."
-                    : `Graph with ${getNumIssues(issueData)} nodes and a depth of ${getMaxDepth(
-                        issueData,
-                      )}.`
-                }
+                title={`Graph with ${getNumIssues(issueData)} nodes and a depth of ${getMaxDepth(
+                  issueData,
+                )}.`}
                 theme={Theme.LIGHT}
               >
                 <Icon glyph={InfoIcon} />
