@@ -1,3 +1,9 @@
+html {
+  overflow: hidden;
+  /* scrollbar-gutter: stable; */
+}
+
+
 .widget {
   display: flex;
   flex-direction: column;

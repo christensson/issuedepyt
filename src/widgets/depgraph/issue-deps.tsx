@@ -19,7 +19,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
 import type { FollowSettings } from "../../../@types/follow-settings";
-import { GraphContext, GraphLoadSettings } from "../../../@types/graph-context";
+import { GraphLoadSettings } from "../../../@types/graph-context";
 import type { GraphViewSettings, HierarchicalDirection } from "../../../@types/graph-view-settings";
 import { createErrorNote, createSuccessNote, NoteProps } from "../../../@types/note";
 import type { Settings } from "../../../@types/settings";
@@ -27,6 +27,7 @@ import { host } from "../global/ytApp";
 import { openGraphPage } from "../issuedepyt-page/open-page";
 import DepGraph from "./dep-graph";
 import DepTimeline from "./dep-timeline";
+import DraggableHeightControl from "./draggable-height-control";
 import exportData from "./export";
 import type { FollowDirection, FollowDirections } from "./fetch-deps";
 import { fetchDeps, fetchDepsAndExtend, fetchIssueAndInfo } from "./fetch-deps";
@@ -36,7 +37,6 @@ import IssueInfoCard from "./issue-info-card";
 import type { DirectionType, IssueInfo, IssueLink, Relation, Relations } from "./issue-types";
 import OptionsDropdownMenu from "./options-dropdown-menu";
 import SearchDropdownMenu from "./search-dropdown-menu";
-import VerticalSizeControl from "./vertical-size-control";
 
 interface IssueDepsProps {
   issueId: string;
@@ -46,6 +46,8 @@ interface IssueDepsProps {
   graphViewSettings: GraphViewSettings;
   setGraphViewSettings: React.Dispatch<React.SetStateAction<GraphViewSettings>>;
   setNote: React.Dispatch<React.SetStateAction<NoteProps | null>>;
+  graphHeight: number;
+  setGraphHeight: React.Dispatch<React.SetStateAction<number>>;
   isSinglePageApp?: boolean;
   useDynamicGraphHeight?: boolean;
 }
@@ -136,6 +138,8 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   graphViewSettings,
   setGraphViewSettings,
   setNote,
+  graphHeight,
+  setGraphHeight,
   isSinglePageApp = false,
   useDynamicGraphHeight = false,
 }) => {
@@ -146,7 +150,6 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   });
   const [timelineVisible, setTimelineVisible] = useState<boolean>(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [graphHeight, setGraphHeight] = useState<number>(400);
   const [highlightedNodes, setHighlightedNodes] = useState<Array<string> | null>(null);
   const [maxDepth, setMaxDepth] = useState<number>(DEFAULT_MAX_DEPTH);
   const [fieldInfo, setFieldInfo] = useState<FieldInfo>({});
@@ -171,8 +174,6 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
 
   const activateGraphHeight = (height: number) => {
     setGraphHeight(height);
-    const actualHeight = height + 280;
-    document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
   };
 
   const getFollowDirections = (followSettings: FollowSettings): FollowDirections => {
@@ -208,7 +209,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     setFieldInfo(fieldInfoData);
     if (useDynamicGraphHeight) {
       const height = calcGraphSizeFromIssues(issues);
-      activateGraphHeight(height);
+      setGraphHeight(height);
     }
     console.log("Fetched issues from root:", issues);
     setIssueData(issues);
@@ -516,6 +517,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           fieldInfo={fieldInfo}
           filterState={filterState}
           graphViewSettings={graphViewSettings}
+          height={graphHeight}
           setSelectedNode={selectNode}
           onOpenNode={openNode}
         >
@@ -671,19 +673,20 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
               </Tooltip>
             </div>
           </div>
+          {!isSinglePageApp && (
+            <div className={"dep-graph-height-control"}>
+              <DraggableHeightControl
+                minValue={GRAPH_CONTROLS_HEIGHT_MIN_VALUE}
+                maxValue={1400}
+                value={graphHeight}
+                onChange={setGraphHeight}
+              />
+            </div>
+          )}
         </DepGraph>
       )}
       {selectedNode !== null && isSelectedNodeAnIssue(selectedNode, issueData) && (
         <IssueInfoCard issue={issueData[selectedNode]} />
-      )}
-      {!isSinglePageApp && (
-        <VerticalSizeControl
-          minValue={GRAPH_CONTROLS_HEIGHT_MIN_VALUE}
-          maxValue={1400}
-          value={graphHeight}
-          increment={130}
-          onChange={activateGraphHeight}
-        />
       )}
     </div>
   );

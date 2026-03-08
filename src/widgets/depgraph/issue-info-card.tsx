@@ -20,8 +20,6 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
 
   const title = issue?.summary ? `${issue.idReadable}: ${issue.summary}` : issue.idReadable;
 
-  console.log(`Showing issue ${issue.id}`);
-
   const getRelation = (link: IssueLink) =>
     link.direction === "OUTWARD" || link.direction === "BOTH"
       ? link.sourceToTarget

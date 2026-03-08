@@ -24,6 +24,7 @@ const AppComponent: React.FunctionComponent = () => {
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
   const [openIssueVisible, setOpenIssueVisible] = useState<boolean>(false);
   const [settings, setSettings] = useState<Settings>({});
+  const [graphHeight, setGraphHeight] = useState<number>(800);
   const [graphLoadSettings, setGraphLoadSettings] =
     useState<GraphLoadSettings>(defaultGraphLoadSettings);
   const [graphViewSettings, setGraphViewSettings] =
@@ -32,10 +33,9 @@ const AppComponent: React.FunctionComponent = () => {
 
   useEffect(() => {
     window.onresize = () => {
-      document.documentElement.style.setProperty(
-        "--window-height",
-        window.outerHeight.toString() + "px",
-      );
+      const ESTIMATED_WINDOW_OVERHEAD = 320;
+      const newHeight = window.outerHeight - ESTIMATED_WINDOW_OVERHEAD;
+      setGraphHeight(newHeight);
     };
   }, []);
 
@@ -143,6 +143,8 @@ const AppComponent: React.FunctionComponent = () => {
             setGraphViewSettings={setGraphViewSettings}
             setNote={setNote}
             isSinglePageApp={true}
+            graphHeight={graphHeight}
+            setGraphHeight={setGraphHeight}
           />
         </div>
       )}

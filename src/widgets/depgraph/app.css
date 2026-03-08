@@ -1,8 +1,4 @@
 :root {
-  --window-height: 1080px;
-  --estimated-window-overhead: 316px;
-  --graph-height: calc(var(--window-height) - var(--estimated-window-overhead));
-
   /* Constants. */
   --vis-timeline-tree-step: 12px;
   /* Colors. */
@@ -281,7 +277,6 @@ div.dep-graph-container {
   position: relative;
   margin-top: calc(var(--ring-unit) / 2);
   margin-bottom: calc(var(--ring-unit) / 2);
-  height: var(--graph-height);
   width: 100%;
   background-color: white;
   border-radius: var(--ring-border-radius);
@@ -290,6 +285,8 @@ div.dep-graph-container {
 }
 
 div.dep-graph {
+  display: flex;
+  flex: 1 1 auto;
   height: 100%;
   width: 100%;
   position: relative;
@@ -321,6 +318,41 @@ div.dep-graph-node-controls {
   gap: calc(var(--ring-unit) / 2);
   display: flex;
   flex-direction: column;
+}
+
+div.dep-graph-height-control {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: calc(var(--ring-unit) / 2);
+  padding: 0;
+  z-index: 2;
+  background-color: transparent;
+  display: flex;
+  justify-content: center;
+}
+
+.draggable-height-control {
+  width: 80px;
+  height: 3px;
+  background-color: var(--ring-borders-color);
+  border-radius: 2px;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  transition: background-color 0.2s, height 0.1s;
+}
+
+.draggable-height-control:hover {
+  background-color: var(--ring-main-color);
+  height: 3px;
+}
+
+.draggable-height-control.dragging {
+  background-color: var(--ring-main-color);
+  height: 3px;
+  cursor: ns-resize;
 }
 
 div.alert-note {

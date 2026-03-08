@@ -40,6 +40,7 @@ interface DepGraphProps extends React.PropsWithChildren {
   fieldInfo: FieldInfo;
   filterState: FilterState;
   graphViewSettings: GraphViewSettings;
+  height: number;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
 }
@@ -275,6 +276,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   fieldInfo,
   filterState,
   graphViewSettings,
+  height,
   setSelectedNode,
   onOpenNode,
   children,
@@ -304,15 +306,15 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   };
 
-  const calcLabelDimensions = (label: string, node: any): { width: number; height: number } => {
+  const calcLabelDimensions = (label: string, node: any): { "width": number; "height": number } => {
     if (label.length === 0) {
-      return { width: 10, height: 10 }; // Minimum width for nodes without labels.
+      return { "width": 10, "height": 10 }; // Minimum width for nodes without labels.
     }
     // Reference implementation is calculateLabelDimensions.
     // See https://github.com/cytoscape/cytoscape.js/blob/unstable/src/extensions/renderer/base/coord-ele-math/labels.mjs
     const ctx = document.createElement("canvas").getContext("2d");
     if (ctx == null) {
-      return { width: 20, height: 20 }; // Minimum width for nodes without labels.
+      return { "width": 20, "height": 20 }; // Minimum width for nodes without labels.
     }
     const fStyle = node.pstyle("font-style").strValue;
     const fontSize = node.pstyle("font-size").pfValue;
@@ -373,8 +375,8 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               "border-width": 2,
               "border-color": Color.SecondaryColor,
               padding: shortLabel ? "5px" : "10px",
-              width: calcNodeWidth,
-              height: calcNodeHeight,
+              "width": calcNodeWidth,
+              "height": calcNodeHeight,
               "text-max-width": layoutOpts.maxNodeWidth ? `${layoutOpts.maxNodeWidth}px` : "200px",
               shape: "round-rectangle",
             } as Css.Node,
@@ -511,8 +513,8 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       if (layoutOpts.maxNodeWidth) {
         Object.assign(nodeStyle, {
           "text-max-width": `${layoutOpts.maxNodeWidth}px`,
-          width: calcNodeWidth,
-          height: calcNodeHeight,
+          "width": calcNodeWidth,
+          "height": calcNodeHeight,
         });
       }
       const shortLabel = !nodeLabelOpts.showSummary && !nodeLabelOpts.showFlags;
@@ -629,7 +631,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   };
 
   return (
-    <div className="dep-graph-container">
+    <div className="dep-graph-container" style={{ height: `${height}px` }}>
       <div ref={containerRef} className="dep-graph" />
       {children}
       <div className="dep-graph-controls">
