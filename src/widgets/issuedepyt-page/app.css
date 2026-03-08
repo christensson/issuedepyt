@@ -7,7 +7,6 @@ html {
   flex-direction: column;
   gap: calc(var(--ring-unit) * 2);
   margin: calc(var(--ring-unit));
-  margin-right:_ calc(var(--ring-unit) / 2);
 }
 
 div.dep-page-header {
