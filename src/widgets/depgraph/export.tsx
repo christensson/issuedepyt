@@ -91,6 +91,7 @@ const exportData = (issueIdReadable: string, issues: { [key: string]: IssueInfo 
             direction: "INWARD",
             targetToSource: "",
             sourceToTarget: "",
+            aggregation: false,
           },
           ""
         )
