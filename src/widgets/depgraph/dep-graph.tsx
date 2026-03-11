@@ -36,6 +36,8 @@ const MAX_NODE_HEIGHT = 200;
 const MIN_ZOOM_AFTER_FIT = 0.7;
 const MAX_ZOOM_AFTER_FIT = 2.0;
 
+const EDGE_FONT_SIZE = 11;
+
 /**
  * Fit the graph into the viewport, clamping zoom to [MIN, MAX].
  * Returns the extra vertical pixels needed, or 0 if the graph fits
@@ -242,6 +244,7 @@ const getGraphObjects = (
   issues: { [key: string]: IssueInfo },
   fieldInfo: FieldInfo,
   nodeLabelOptions: NodeLabelOptions,
+  layoutOptions: LayoutOptions,
 ): ElementDefinition[] => {
   // Deduplicate edges from the perspective of the root node(s) using BFS.
   // For each node pair + link type, only keep the edge emitted by the node
@@ -330,6 +333,25 @@ const getGraphObjects = (
           arrowTo: link.direction !== "BOTH",
         },
       });
+    }
+  }
+
+  // For each node-pair with multiple edges, pre-compute the vertical label
+  // offset so that horizontal labels are evenly centered around the edge midpoint.
+  const pairEdges: { [pairKey: string]: ElementDefinition[] } = {};
+  for (const edge of edges) {
+    const s = edge.data!.source;
+    const t = edge.data!.target;
+    const pairKey = s < t ? `${s}|${t}` : `${t}|${s}`;
+    if (!pairEdges[pairKey]) pairEdges[pairKey] = [];
+    pairEdges[pairKey].push(edge);
+  }
+  for (const group of Object.values(pairEdges)) {
+    const count = group.length;
+    for (let i = 0; i < count; i++) {
+      group[i].data!.textMarginY = layoutOptions.horizontalEdgeLabels
+        ? (i - (count - 1) / 2) * EDGE_FONT_SIZE * 1.7  // 1.7 is the best compromise so that labels don't overlap
+        : 0;
     }
   }
 
@@ -498,7 +520,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               label: "data(label)",
               "font-size": "11px",
               "text-rotation": layoutOpts.horizontalEdgeLabels ? 0 : "autorotate",
-              "text-margin-y": 0,
+              "text-margin-y": (ele: any) => ele.data("textMarginY") || 0,
               "text-background-color": "#ffffff",
               "text-background-opacity": 0.8,
               "text-background-padding": "2px",
@@ -627,11 +649,12 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       });
       cy.style().selector("node").style(nodeStyle).update();
 
-      // Update edge label rotation.
+      // Update edge label rotation and offset.
       cy.style()
         .selector("edge")
         .style({
           "text-rotation": layoutOpts.horizontalEdgeLabels ? 0 : "autorotate",
+          "text-margin-y": (ele: any) => ele.data("textMarginY") || 0,
         })
         .update();
 
@@ -679,7 +702,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
       const nodeLabelOpts = graphViewSettings.nodeLabelOptions;
       const layoutOpts = graphViewSettings.layoutOptions;
-      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOpts);
+      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOpts, layoutOpts);
 
       // Replace all elements.
       cy.elements().remove();
