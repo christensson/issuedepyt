@@ -15,7 +15,7 @@ const downloadFile = (filename: string, mimeType: string, content: any): void =>
 
 const exportData = (issueIdReadable: string, issues: { [key: string]: IssueInfo }): void => {
   const rootIssue = Object.values(issues).find((x) =>
-    x.isDraft ? x.id === issueIdReadable : x.idReadable === issueIdReadable
+    x.isDraft ? x.id === issueIdReadable : x.idReadable === issueIdReadable,
   );
   if (!rootIssue) {
     console.log(`Failed to export ${issueIdReadable}: Cannot find fetched data`, issues);
@@ -59,8 +59,8 @@ const exportData = (issueIdReadable: string, issues: { [key: string]: IssueInfo 
       ];
       row.push(
         ...extraFieldNames.map((fieldName) =>
-          toTextCol(issue.extraFields.find((field) => field.name === fieldName)?.value)
-        )
+          toTextCol(issue.extraFields.find((field) => field.name === fieldName)?.value),
+        ),
       );
       row.push(
         toBooleanCol(!!issue.resolved),
@@ -68,16 +68,16 @@ const exportData = (issueIdReadable: string, issues: { [key: string]: IssueInfo 
         toTextCol(link.targetIdReadable),
         toTextCol(link.type),
         toTextCol(link.direction === "INWARD" ? link.targetToSource : link.sourceToTarget),
-        toTextCol(direction)
+        toTextCol(direction),
       );
       return row.join(",");
     };
     if (issue.linksKnown) {
       rows.push(
-        ...issue.upstreamLinks.map((link: IssueLink) => issueCols(issue, link, "upstream"))
+        ...issue.upstreamLinks.map((link: IssueLink) => issueCols(issue, link, "upstream")),
       );
       rows.push(
-        ...issue.downstreamLinks.map((link: IssueLink) => issueCols(issue, link, "downstream"))
+        ...issue.downstreamLinks.map((link: IssueLink) => issueCols(issue, link, "downstream")),
       );
     } else {
       rows.push(
@@ -91,16 +91,17 @@ const exportData = (issueIdReadable: string, issues: { [key: string]: IssueInfo 
             direction: "INWARD",
             targetToSource: "",
             sourceToTarget: "",
+            aggregation: false,
           },
-          ""
-        )
+          "",
+        ),
       );
     }
     return rows;
   };
   // Sort in depth order.
   const sortedIssues = Object.values(issues).sort(
-    (a: IssueInfo, b: IssueInfo) => a.depth - b.depth
+    (a: IssueInfo, b: IssueInfo) => a.depth - b.depth,
   );
   const rows = [cols.join(",")];
   rows.push(...sortedIssues.flatMap(createIssueRows));
@@ -108,7 +109,7 @@ const exportData = (issueIdReadable: string, issues: { [key: string]: IssueInfo 
   downloadFile(
     `${issueIdReadable.toLowerCase().replace("-", "")}_export.csv`,
     "text/csv",
-    rows.join("\n")
+    rows.join("\n"),
   );
 };
 

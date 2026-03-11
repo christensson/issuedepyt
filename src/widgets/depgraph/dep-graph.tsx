@@ -332,7 +332,7 @@ const getGraphObjects = (
           target: link.targetId,
           label,
           title: label,
-          arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
+          arrowFrom: link.direction == "OUTWARD" && link.aggregation,
           arrowTo: link.direction !== "BOTH",
         },
       });
