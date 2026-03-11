@@ -148,9 +148,9 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
   };
 
-  const growGraphHeight = useCallback((extraHeight: number) => {
+  const growGraphHeight = useCallback((neededHeight: number) => {
     // Round up to whole increments.
-    const steps = Math.ceil(extraHeight / GRAPH_HEIGHT_INCREMENT);
+    const steps = Math.ceil(neededHeight / GRAPH_HEIGHT_INCREMENT);
     const growth = steps * GRAPH_HEIGHT_INCREMENT;
     setGraphHeight((prev) => {
       const newHeight = Math.min(prev + growth, GRAPH_HEIGHT_MAX);
@@ -672,11 +672,10 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
         <IssueInfoCard issue={issueData[selectedNode]} />
       )}
       {!isSinglePageApp && (
-        <VerticalSizeControl
+        <DraggableHeightControl
           minValue={GRAPH_INITIAL_HEIGHT}
           maxValue={GRAPH_HEIGHT_MAX}
           value={graphHeight}
-          increment={GRAPH_HEIGHT_INCREMENT}
           onChange={activateGraphHeight}
         />
       )}

@@ -33,7 +33,7 @@ const MAX_NODE_WIDTH = 400;
 const MIN_NODE_HEIGHT = 20;
 const MAX_NODE_HEIGHT = 200;
 
-const MIN_ZOOM_AFTER_FIT = 0.8;
+const MIN_ZOOM_AFTER_FIT = 0.6;
 const MAX_ZOOM_AFTER_FIT = 2.0;
 
 /**
@@ -91,7 +91,7 @@ interface DepGraphProps extends React.PropsWithChildren {
   height: number;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
-  onRequestGrow?: (extraHeight: number) => void;
+  onRequestGrow?: (neededHeight: number) => void;
 }
 
 const FONT_FAMILY = "system-ui, Arial, sans-serif";
@@ -333,6 +333,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const pendingFit = useRef(false);
 
   const updateSelectedNodes = (selectedId: string | null, highlightedIds: Array<string> | null) => {
     if (!cyRef.current) {
@@ -510,9 +511,24 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   }, []);
 
-  const getLayoutOptions = (layoutOpts: LayoutOptions) => {
-    if (layoutOpts.hierarchical) {
-      if (layoutOpts.alternateTreeLayout) {
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      if (pendingFit.current && cyRef.current) {
+        pendingFit.current = false;
+        cyRef.current.resize();
+        smartFitGraph(cyRef.current);
+      }
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const getLayoutOptions = (layoutOptions: LayoutOptions) => {
+    if (layoutOptions.hierarchical) {
+      if (layoutOptions.alternateTreeLayout) {
         const toDirection = {
           TB: "DOWN",
           BT: "UP",
@@ -522,7 +538,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         return {
           name: "klay",
           klay: {
-            direction: toDirection[layoutOpts.hierarchicalDirection],
+            direction: toDirection[layoutOptions.hierarchicalDirection as keyof typeof toDirection],
           },
           nodeDimensionsIncludeLabels: true,
           animate: false,
@@ -532,7 +548,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       }
       return {
         name: "dagre",
-        rankDir: layoutOpts.hierarchicalDirection,
+        rankDir: layoutOptions.hierarchicalDirection,
         nodeDimensionsIncludeLabels: true,
         ranker: "network-simplex",
         animate: false,
@@ -586,18 +602,15 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const layout = cy.layout(cyLayoutOpts);
       layout.removeListener("layoutstop");
       layout.on("layoutstop", () => {
-        const extraHeight = smartFitGraph(cy);
-        if (extraHeight > 0 && onRequestGrow) {
-          onRequestGrow(extraHeight);
-          setTimeout(() => {
-            cy.resize();
-            smartFitGraph(cy);
-          }, 100);
+        const neededHeight = smartFitGraph(cy);
+        if (neededHeight > 0 && onRequestGrow) {
+          pendingFit.current = true;
+          onRequestGrow(neededHeight);
         }
       });
       layout.run();
     }
-  }, [maxNodeWidth, layoutOptions, nodeLabelOptions, onRequestGrow]);
+  }, [graphViewSettings, onRequestGrow]);
 
   // Update event handlers when callbacks change.
   useEffect(() => {
@@ -638,20 +651,17 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cyLayoutOpts = getLayoutOptions(layoutOpts);
       const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
-        const extraHeight = smartFitGraph(cy);
-        if (extraHeight > 0 && onRequestGrow) {
-          onRequestGrow(extraHeight);
-          setTimeout(() => {
-            cy.resize();
-            smartFitGraph(cy);
-          }, 100);
+        const neededHeight = smartFitGraph(cy);
+        if (neededHeight > 0 && onRequestGrow) {
+          pendingFit.current = true;
+          onRequestGrow(neededHeight);
         }
       });
       layout.run();
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, graphViewSettings, nodeLabelOptions, layoutOptions, onRequestGrow]);
+  }, [issues, fieldInfo, filterState, graphViewSettings, onRequestGrow]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {
