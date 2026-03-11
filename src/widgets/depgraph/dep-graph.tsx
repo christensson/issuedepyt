@@ -249,61 +249,99 @@ const getGraphObjects = (
   fieldInfo: FieldInfo,
   nodeLabelOptions: NodeLabelOptions,
 ): ElementDefinition[] => {
-  const linkInfo = {};
-  const linksAndEdges = Object.values(issues).flatMap((issue: IssueInfo) =>
-    [
+  // Deduplicate edges from the perspective of the root node(s) using BFS.
+  // For each node pair + link type, only keep the edge emitted by the node
+  // closer to the root. E.g. if root B has "parent for" → A, the reverse
+  // "subtask of" edge from A → B is suppressed because B is closer to root.
+
+  // Find root nodes (depth 0) and build an adjacency list for BFS ordering.
+  const rootIds = Object.values(issues)
+    .filter((issue) => issue.depth === 0)
+    .map((issue) => issue.id);
+
+  // BFS to determine visitation order from root(s).
+  const visitOrder: string[] = [];
+  const visited = new Set<string>();
+  const queue: string[] = [...rootIds];
+  for (const id of queue) {
+    visited.add(id);
+  }
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    visitOrder.push(currentId);
+    const current = issues[currentId];
+    if (!current) continue;
+
+    // Gather all neighbor IDs from visible links.
+    const neighborIds = new Set<string>();
+    if (current.showUpstream) {
+      for (const link of current.upstreamLinks) {
+        if (link.targetId in issues) neighborIds.add(link.targetId);
+      }
+    }
+    if (current.showDownstream) {
+      for (const link of current.downstreamLinks) {
+        if (link.targetId in issues) neighborIds.add(link.targetId);
+      }
+    }
+    for (const neighborId of neighborIds) {
+      if (!visited.has(neighborId)) {
+        visited.add(neighborId);
+        queue.push(neighborId);
+      }
+    }
+  }
+
+  // Walk nodes in BFS order and collect edges.
+  // Nodes not reachable from root(s) are excluded from the graph entirely.
+  // For each (node-pair, link-type) combo, keep only the first edge encountered.
+  // This ensures the edge emitted by the node closer to root wins.
+  const edges: ElementDefinition[] = [];
+  const edgePairTypeAdded = new Set<string>();
+
+  for (const issueId of visitOrder) {
+    const issue = issues[issueId];
+    if (!issue) continue;
+
+    const links = [
       ...(issue.showUpstream ? issue.upstreamLinks : []),
       ...(issue.showDownstream ? issue.downstreamLinks : []),
-    ]
-      // Only include links where the target issue exists.
-      .filter((link: IssueLink) => link.targetId in issues)
-      .map((link: IssueLink) => {
-        const label =
-          link.direction === "OUTWARD" || link.direction === "BOTH"
-            ? link.sourceToTarget
-            : link.targetToSource;
-        return {
-          direction: link.direction,
-          type: link.type,
-          edge: {
-            data: {
-              id: `${issue.id}-${link.targetId}-${link.type}`,
-              source: issue.id,
-              target: link.targetId,
-              label,
-              title: label,
-              arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
-              arrowTo: link.direction !== "BOTH",
-            },
-          },
-        };
-      }),
-  );
+    ].filter((link: IssueLink) => link.targetId in issues);
 
-  // Filter out duplicate edges.
-  let edges: ElementDefinition[] = [];
-  const unDirectedEdgesAdded: { [key: string]: boolean } = {};
-  for (const { direction, type, edge } of linksAndEdges) {
-    // Include all directed edges.
-    if (direction !== "BOTH") {
-      edges.push(edge);
-      continue;
+    for (const link of links) {
+      // Normalize pair key so A-B and B-A with same type map to one slot.
+      const pairKey =
+        issueId < link.targetId
+          ? `${issueId}|${link.targetId}|${link.type}`
+          : `${link.targetId}|${issueId}|${link.type}`;
+
+      if (edgePairTypeAdded.has(pairKey)) {
+        continue;
+      }
+      edgePairTypeAdded.add(pairKey);
+
+      const label =
+        link.direction === "OUTWARD" || link.direction === "BOTH"
+          ? link.sourceToTarget
+          : link.targetToSource;
+
+      edges.push({
+        data: {
+          id: `${issueId}-${link.targetId}-${link.type}`,
+          source: issueId,
+          target: link.targetId,
+          label,
+          title: label,
+          arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
+          arrowTo: link.direction !== "BOTH",
+        },
+      });
     }
-
-    // If non-directed, check if already added.
-    const reverseEdgeKey = `${type}-${edge.data.target}-${edge.data.source}`;
-
-    if (reverseEdgeKey in unDirectedEdgesAdded) {
-      continue;
-    }
-
-    // Add and mark as added.
-    edges.push(edge);
-    const edgeKey = `${type}-${edge.data.source}-${edge.data.target}`;
-    unDirectedEdgesAdded[edgeKey] = true;
   }
 
   const nodes: ElementDefinition[] = Object.values(issues)
+    // Only include nodes reachable from root.
+    .filter((issue: IssueInfo) => visited.has(issue.id))
     // Transform issues to graph nodes.
     .map((issue: IssueInfo) => {
       const colorEntry = getColor(issue.state, fieldInfo?.stateField);
