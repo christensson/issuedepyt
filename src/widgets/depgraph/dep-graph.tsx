@@ -664,14 +664,14 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       layout.removeListener("layoutstop");
       layout.on("layoutstop", () => {
         const neededHeight = smartFitGraph(cy);
-        if (neededHeight > 0 && onRequestGrow) {
+        if (neededHeight > 0) {
           pendingFit.current = true;
-          onRequestGrow(neededHeight);
+          onRequestGrow?.(neededHeight);
         }
       });
       layout.run();
     }
-  }, [graphViewSettings, onRequestGrow]);
+  }, [graphViewSettings]);
 
   // Update event handlers when callbacks change.
   useEffect(() => {
@@ -713,16 +713,16 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
         const neededHeight = smartFitGraph(cy);
-        if (neededHeight > 0 && onRequestGrow) {
+        if (neededHeight > 0) {
           pendingFit.current = true;
-          onRequestGrow(neededHeight);
+          onRequestGrow?.(neededHeight);
         }
       });
       layout.run();
 
       updateSelectedNodes(selectedIssueId, highlightedIssueIds);
     }
-  }, [issues, fieldInfo, filterState, graphViewSettings, onRequestGrow]);
+  }, [issues, fieldInfo, filterState, graphViewSettings]);
 
   // Update selection when selectedIssueId or highlightedIssueIds change
   useEffect(() => {

@@ -57,13 +57,11 @@ interface IssueDepsProps {
 
 const DEFAULT_MAX_DEPTH = 6;
 
-const GRAPH_HEIGHT_MARGIN = 40;
-const GRAPH_CONTROLS_HEIGHT_MIN_VALUE = 200;
+const GRAPH_CONTROLS_HEIGHT_MIN_VALUE = 230;
 
 // Must match --estimated-window-overhead in app.css.
 const GRAPH_WINDOW_OVERHEAD = 316;
-const GRAPH_INITIAL_HEIGHT = 130;
-const GRAPH_HEIGHT_INCREMENT = 130;
+const GRAPH_INITIAL_HEIGHT = 100;
 const GRAPH_HEIGHT_MAX = 1400;
 
 const getNumIssues = (issueData: { [key: string]: IssueInfo }): number => {
@@ -128,7 +126,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
 
   // Auto-collapse the floating menu when the graph is shrunk to its smallest size.
   useEffect(() => {
-    if (graphHeight <= GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
+    if (graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
       setGraphNodeControlsOpen(false);
     }
   }, [graphHeight]);
@@ -139,7 +137,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   };
 
   const activateGraphHeight = (height: number) => {
-    if (showMenuOnFirstGrow.current && height > graphHeight) {
+    if (showMenuOnFirstGrow.current && height > GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
       showMenuOnFirstGrow.current = false;
       setGraphNodeControlsOpen(true);
     }
@@ -149,15 +147,13 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   };
 
   const growGraphHeight = useCallback((neededHeight: number) => {
-    // Round up to whole increments.
-    const steps = Math.ceil(neededHeight / GRAPH_HEIGHT_INCREMENT);
-    const growth = steps * GRAPH_HEIGHT_INCREMENT;
+    const growth = Math.ceil(neededHeight);
     setGraphHeight((prev) => {
       const newHeight = Math.min(prev + growth, GRAPH_HEIGHT_MAX);
       if (newHeight > prev) {
         const actualHeight = newHeight + GRAPH_WINDOW_OVERHEAD;
         document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
-        if (showMenuOnFirstGrow.current) {
+        if (showMenuOnFirstGrow.current && newHeight >= GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
           showMenuOnFirstGrow.current = false;
           setGraphNodeControlsOpen(true);
         }
@@ -203,7 +199,16 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     }
     initialLoadDone.current = true;
     console.log("Fetched issues from root:", issues);
-    setIssueData(issues);
+    // Preserve user-toggled showUpstream/showDownstream from previous data.
+    setIssueData((prevIssueData) => {
+      for (const id of Object.keys(issues)) {
+        if (id in prevIssueData) {
+          issues[id].showUpstream = prevIssueData[id].showUpstream;
+          issues[id].showDownstream = prevIssueData[id].showDownstream;
+        }
+      }
+      return issues;
+    });
     // Remove highlight.
     setHighlightedNodes(null);
     // Set selected node to the root issue if none selected already.
@@ -253,7 +258,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   );
 
   useEffect(() => {
-    if (settings?.maxRecursionDepth != undefined) {
+    if (settings?.maxRecursionDepth !== undefined) {
       setMaxDepth(settings.maxRecursionDepth);
     }
 
@@ -290,7 +295,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     <div>
       {Object.keys(issueData).length === 0 && (
         // Reserve space on initial load since note is shown absolute at top.
-        <div style={{ height: "80px" }} />
+        <div style={{ height: "80px" }}/>
       )}
       <div className="dep-toolbar">
         {selectedNode !== null && selectedNode in issueData && (
@@ -373,24 +378,24 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 )}.`}
                 theme={Theme.LIGHT}
               >
-                <Icon glyph={InfoIcon} />
+                <Icon glyph={InfoIcon}/>
               </Tooltip>
             </span>
             <Tooltip title="Reload data" theme={Theme.LIGHT}>
-              <Button onClick={refreshData} icon={UpdateIcon} />
+              <Button onClick={refreshData} icon={UpdateIcon}/>
             </Tooltip>
             <SearchDropdownMenu
               fieldInfo={fieldInfo}
               issueData={issueData}
               settings={settings}
               setHighlightedNodes={setHighlightedNodes}
-              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
+              maxHeight={graphHeight}
             />
             <FilterDropdownMenu
               fieldInfo={fieldInfo}
               filterState={filterState}
               setFilterState={setFilterState}
-              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
+              maxHeight={graphHeight}
             />
             {!isSinglePageApp && (
               <Tooltip title="Open graph in full-screen page..." theme={Theme.LIGHT}>
@@ -418,7 +423,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                   layoutOptions: { ...prev.layoutOptions, maxNodeWidth },
                 }))
               }
-              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
+              maxHeight={graphHeight}
               setUseHierarchicalLayout={(hierarchical: boolean) =>
                 setGraphViewSettings((prev) => ({
                   ...prev,
@@ -643,8 +648,8 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 <Button
                   inline
                   onClick={() => {
-                    if (!graphNodeControlsOpen && graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN) {
-                      activateGraphHeight(Math.min(graphHeight + GRAPH_HEIGHT_INCREMENT, GRAPH_HEIGHT_MAX));
+                    if (!graphNodeControlsOpen && graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
+                      activateGraphHeight(GRAPH_CONTROLS_HEIGHT_MIN_VALUE);
                     }
                     setGraphNodeControlsOpen((prev) => !prev);
                   }}
@@ -659,7 +664,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           {!isSinglePageApp && (
             <div className={"dep-graph-height-control"}>
               <DraggableHeightControl
-                minValue={GRAPH_CONTROLS_HEIGHT_MIN_VALUE}
+                minValue={GRAPH_INITIAL_HEIGHT}
                 maxValue={1400}
                 value={graphHeight}
                 onChange={setGraphHeight}
@@ -669,7 +674,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
         </DepGraph>
       )}
       {selectedNode !== null && isSelectedNodeAnIssue(selectedNode, issueData) && (
-        <IssueInfoCard issue={issueData[selectedNode]} />
+        <IssueInfoCard issue={issueData[selectedNode]}/>
       )}
       {!isSinglePageApp && (
         <DraggableHeightControl

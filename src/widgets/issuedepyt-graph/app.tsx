@@ -20,7 +20,7 @@ const issue = YTApp.entity;
 const AppComponent: React.FunctionComponent = () => {
   const [settings, setSettings] = useState<Settings>({});
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
-  const [graphHeight, setGraphHeight] = useState<number>(400);
+  const [graphHeight, setGraphHeight] = useState<number>(130);
   const [graphLoadSettings, setGraphLoadSettings] =
     useState<GraphLoadSettings>(defaultGraphLoadSettings);
   const [graphViewSettings, setGraphViewSettings] =
