@@ -292,7 +292,7 @@ async function fetchDepsRecursive(
         upstreamLinks: [],
         downstreamLinks: [],
         linksKnown: false,
-        showUpstream: false,
+        showUpstream: true,
         showDownstream: false,
         extraFields: link.extraFields,
       };
@@ -426,7 +426,7 @@ export async function fetchIssueAndInfo(
     downstreamLinks: [],
     linksKnown: false,
     showDownstream: false,
-    showUpstream: false,
+    showUpstream: true,
     extraFields: getExtraFields(settings?.extraCustomFields, issueInfo.customFields),
   };
 
