@@ -28,6 +28,62 @@ import type { IssueInfo, IssueLink } from "./issue-types";
 
 const GRAPH_PADDING = 20;
 
+const MIN_NODE_WIDTH = 40;
+const MAX_NODE_WIDTH = 400;
+const MIN_NODE_HEIGHT = 20;
+const MAX_NODE_HEIGHT = 200;
+
+const MIN_ZOOM_AFTER_FIT = 0.7;
+const MAX_ZOOM_AFTER_FIT = 2.0;
+
+const EDGE_FONT_SIZE = 11;
+
+/**
+ * Fit the graph into the viewport, clamping zoom to [MIN, MAX].
+ * Returns the extra vertical pixels needed, or 0 if the graph fits
+ * or vertical growth wouldn't help.
+ */
+const smartFitGraph = (cy: Core): number => {
+  cy.fit(undefined, GRAPH_PADDING);
+  const zoom = cy.zoom();
+  if (zoom > MAX_ZOOM_AFTER_FIT) {
+    cy.zoom(MAX_ZOOM_AFTER_FIT);
+    cy.center();
+    return 0;
+  } else if (zoom < MIN_ZOOM_AFTER_FIT) {
+    cy.zoom(MIN_ZOOM_AFTER_FIT);
+    cy.center();
+
+    // Check whether vertical growth would actually help by comparing
+    // the graph bounding box to the container dimensions.
+    // If the graph is much wider than it is tall relative to the
+    // container, adding height won't improve the fit.
+    const bb = cy.elements().boundingBox();
+    const containerWidth = cy.width();
+    const containerHeight = cy.height();
+    if (bb.w === 0 || bb.h === 0 || containerWidth === 0 || containerHeight === 0) {
+      return containerHeight;
+    }
+    const graphAspect = bb.w / bb.h;
+    const containerAspect = containerWidth / containerHeight;
+    // When the graph is much wider than the container (width is the
+    // primary bottleneck), adding height won't improve the zoom level.
+    // However, the container should still be tall enough to render the
+    // graph's vertical extent comfortably so that the user has a usable
+    // viewport (especially when starting from the small initial height).
+    if (graphAspect > containerAspect * 1.5) {
+      const targetHeight = (bb.h + 2 * GRAPH_PADDING) * MIN_ZOOM_AFTER_FIT;
+      const extraHeight = Math.ceil(targetHeight - containerHeight);
+      return Math.max(0, extraHeight);
+    }
+    // Calculate how much taller the container needs to be.
+    const scaleFactor = MIN_ZOOM_AFTER_FIT / zoom;
+    const extraHeight = Math.ceil(containerHeight * (scaleFactor - 1));
+    return Math.max(0, extraHeight);
+  }
+  return 0;
+};
+
 // Register Cytoscape extensions
 cytoscape.use(dagre);
 cytoscape.use(klay);
@@ -43,6 +99,7 @@ interface DepGraphProps extends React.PropsWithChildren {
   height: number;
   setSelectedNode: (nodeId: string) => void;
   onOpenNode: (nodeId: string) => void;
+  onRequestGrow?: (neededHeight: number) => void;
 }
 
 const FONT_FAMILY = "system-ui, Arial, sans-serif";
@@ -193,62 +250,120 @@ const getGraphObjects = (
   issues: { [key: string]: IssueInfo },
   fieldInfo: FieldInfo,
   nodeLabelOptions: NodeLabelOptions,
+  layoutOptions: LayoutOptions,
 ): ElementDefinition[] => {
-  const linkInfo = {};
-  const linksAndEdges = Object.values(issues).flatMap((issue: IssueInfo) =>
-    [
+  // Deduplicate edges from the perspective of the root node(s) using BFS.
+  // For each node pair + link type, only keep the edge emitted by the node
+  // closer to the root. E.g. if root B has "parent for" → A, the reverse
+  // "subtask of" edge from A → B is suppressed because B is closer to root.
+
+  // Find root nodes (depth 0) and build an adjacency list for BFS ordering.
+  const rootIds = Object.values(issues)
+    .filter((issue) => issue.depth === 0)
+    .map((issue) => issue.id);
+
+  // BFS to determine visitation order from root(s).
+  const visitOrder: string[] = [];
+  const visited = new Set<string>();
+  const queue: string[] = [...rootIds];
+  for (const id of queue) {
+    visited.add(id);
+  }
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    visitOrder.push(currentId);
+    const current = issues[currentId];
+    if (!current) continue;
+
+    // Gather all neighbor IDs from visible links.
+    const neighborIds = new Set<string>();
+    if (current.showUpstream) {
+      for (const link of current.upstreamLinks) {
+        if (link.targetId in issues) neighborIds.add(link.targetId);
+      }
+    }
+    if (current.showDownstream) {
+      for (const link of current.downstreamLinks) {
+        if (link.targetId in issues) neighborIds.add(link.targetId);
+      }
+    }
+    for (const neighborId of neighborIds) {
+      if (!visited.has(neighborId)) {
+        visited.add(neighborId);
+        queue.push(neighborId);
+      }
+    }
+  }
+
+  // Walk nodes in BFS order and collect edges.
+  // Nodes not reachable from root(s) are excluded from the graph entirely.
+  // For each (node-pair, link-type) combo, keep only the first edge encountered.
+  // This ensures the edge emitted by the node closer to root wins.
+  const edges: ElementDefinition[] = [];
+  const edgePairTypeAdded = new Set<string>();
+
+  for (const issueId of visitOrder) {
+    const issue = issues[issueId];
+    if (!issue) continue;
+
+    const links = [
       ...(issue.showUpstream ? issue.upstreamLinks : []),
       ...(issue.showDownstream ? issue.downstreamLinks : []),
-    ]
-      // Only include links where the target issue exists.
-      .filter((link: IssueLink) => link.targetId in issues)
-      .map((link: IssueLink) => {
-        const label =
-          link.direction === "OUTWARD" || link.direction === "BOTH"
-            ? link.sourceToTarget
-            : link.targetToSource;
-        return {
-          direction: link.direction,
-          type: link.type,
-          edge: {
-            data: {
-              id: `${issue.id}-${link.targetId}-${link.type}`,
-              source: issue.id,
-              target: link.targetId,
-              label,
-              title: label,
-              arrowFrom: link.direction == "OUTWARD" && link.type == "Subtask",
-              arrowTo: link.direction !== "BOTH",
-            },
-          },
-        };
-      }),
-  );
+    ].filter((link: IssueLink) => link.targetId in issues);
 
-  // Filter out duplicate edges.
-  let edges: ElementDefinition[] = [];
-  const unDirectedEdgesAdded: { [key: string]: boolean } = {};
-  for (const { direction, type, edge } of linksAndEdges) {
-    // Include all directed edges.
-    if (direction !== "BOTH") {
-      edges.push(edge);
-      continue;
+    for (const link of links) {
+      // Normalize pair key so A-B and B-A with same type map to one slot.
+      const pairKey =
+        issueId < link.targetId
+          ? `${issueId}|${link.targetId}|${link.type}`
+          : `${link.targetId}|${issueId}|${link.type}`;
+
+      if (edgePairTypeAdded.has(pairKey)) {
+        continue;
+      }
+      edgePairTypeAdded.add(pairKey);
+
+      const label =
+        link.direction === "OUTWARD" || link.direction === "BOTH"
+          ? link.sourceToTarget
+          : link.targetToSource;
+
+      edges.push({
+        data: {
+          id: `${issueId}-${link.targetId}-${link.type}`,
+          source: issueId,
+          target: link.targetId,
+          label,
+          title: label,
+          arrowFrom: link.direction == "OUTWARD" && link.aggregation,
+          arrowTo: link.direction !== "BOTH",
+        },
+      });
     }
+  }
 
-    // If non-directed, check if already added.
-    const reverseEdgeKey = `${type}-${edge.data.target}-${edge.data.source}`;
-
-    if (reverseEdgeKey in unDirectedEdgesAdded) {
-      continue;
+  // For each node-pair with multiple edges, pre-compute the vertical label
+  // offset so that horizontal labels are evenly centered around the edge midpoint.
+  const pairEdges: { [pairKey: string]: ElementDefinition[] } = {};
+  for (const edge of edges) {
+    const s = edge.data!.source;
+    const t = edge.data!.target;
+    const pairKey = s < t ? `${s}|${t}` : `${t}|${s}`;
+    if (!pairEdges[pairKey]) pairEdges[pairKey] = [];
+    pairEdges[pairKey].push(edge);
+  }
+  for (const group of Object.values(pairEdges)) {
+    const count = group.length;
+    for (let i = 0; i < count; i++) {
+      group[i].data!.textMarginY = layoutOptions.horizontalEdgeLabels
+        ? (i - (count - 1) / 2) * EDGE_FONT_SIZE * 1.7  // 1.7 is the best compromise so that labels don't overlap
+        : 0;
     }
-
-    // Add and mark as added.
-    edges.push(edge);
-    const edgeKey = `${type}-${edge.data.source}-${edge.data.target}`;
-    unDirectedEdgesAdded[edgeKey] = true;
   }
 
   const nodes: ElementDefinition[] = Object.values(issues)
+    // Only include nodes reachable from root.
+    .filter((issue: IssueInfo) => visited.has(issue.id))
     // Transform issues to graph nodes.
     .map((issue: IssueInfo) => {
       const colorEntry = getColor(issue.state, fieldInfo?.stateField);
@@ -279,10 +394,12 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   height,
   setSelectedNode,
   onOpenNode,
+  onRequestGrow,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const pendingFit = useRef(false);
 
   const updateSelectedNodes = (selectedId: string | null, highlightedIds: Array<string> | null) => {
     if (!cyRef.current) {
@@ -341,13 +458,13 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   const calcNodeWidth = (node: any) => {
     const label = node.data("label") || "";
     const dimensions = calcLabelDimensions(label, node);
-    return dimensions.width;
+    return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, dimensions.width));
   };
 
   const calcNodeHeight = (node: any) => {
     const label = node.data("label") || "";
     const dimensions = calcLabelDimensions(label, node);
-    return dimensions.height;
+    return Math.min(MAX_NODE_HEIGHT, Math.max(MIN_NODE_HEIGHT, dimensions.height));
   };
 
   // Initialize Cytoscape.
@@ -409,7 +526,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               label: "data(label)",
               "font-size": "11px",
               "text-rotation": layoutOpts.horizontalEdgeLabels ? 0 : "autorotate",
-              "text-margin-y": 0,
+              "text-margin-y": (ele: any) => ele.data("textMarginY") || 0,
               "text-background-color": "#ffffff",
               "text-background-opacity": 0.8,
               "text-background-padding": "2px",
@@ -460,9 +577,24 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
     }
   }, []);
 
-  const getLayoutOptions = (layoutOpts: LayoutOptions) => {
-    if (layoutOpts.hierarchical) {
-      if (layoutOpts.alternateTreeLayout) {
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      if (pendingFit.current && cyRef.current) {
+        pendingFit.current = false;
+        cyRef.current.resize();
+        smartFitGraph(cyRef.current);
+      }
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const getLayoutOptions = (layoutOptions: LayoutOptions) => {
+    if (layoutOptions.hierarchical) {
+      if (layoutOptions.alternateTreeLayout) {
         const toDirection = {
           TB: "DOWN",
           BT: "UP",
@@ -472,7 +604,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
         return {
           name: "klay",
           klay: {
-            direction: toDirection[layoutOpts.hierarchicalDirection],
+            direction: toDirection[layoutOptions.hierarchicalDirection as keyof typeof toDirection],
           },
           nodeDimensionsIncludeLabels: true,
           animate: false,
@@ -482,7 +614,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       }
       return {
         name: "dagre",
-        rankDir: layoutOpts.hierarchicalDirection,
+        rankDir: layoutOptions.hierarchicalDirection,
         nodeDimensionsIncludeLabels: true,
         ranker: "network-simplex",
         animate: false,
@@ -523,11 +655,12 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       });
       cy.style().selector("node").style(nodeStyle).update();
 
-      // Update edge label rotation.
+      // Update edge label rotation and offset.
       cy.style()
         .selector("edge")
         .style({
           "text-rotation": layoutOpts.horizontalEdgeLabels ? 0 : "autorotate",
+          "text-margin-y": (ele: any) => ele.data("textMarginY") || 0,
         })
         .update();
 
@@ -536,7 +669,11 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const layout = cy.layout(cyLayoutOpts);
       layout.removeListener("layoutstop");
       layout.on("layoutstop", () => {
-        cy.fit(undefined, GRAPH_PADDING);
+        const neededHeight = smartFitGraph(cy);
+        if (neededHeight > 0) {
+          pendingFit.current = true;
+          onRequestGrow?.(neededHeight);
+        }
       });
       layout.run();
     }
@@ -571,7 +708,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       console.log(`Rendering graph with ${Object.keys(visibleIssues).length} nodes`);
       const nodeLabelOpts = graphViewSettings.nodeLabelOptions;
       const layoutOpts = graphViewSettings.layoutOptions;
-      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOpts);
+      const elements = getGraphObjects(visibleIssues, fieldInfo, nodeLabelOpts, layoutOpts);
 
       // Replace all elements.
       cy.elements().remove();
@@ -581,7 +718,11 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
       const cyLayoutOpts = getLayoutOptions(layoutOpts);
       const layout = cy.layout(cyLayoutOpts);
       layout.on("layoutstop", () => {
-        cy.fit(undefined, GRAPH_PADDING);
+        const neededHeight = smartFitGraph(cy);
+        if (neededHeight > 0) {
+          pendingFit.current = true;
+          onRequestGrow?.(neededHeight);
+        }
       });
       layout.run();
 
@@ -626,7 +767,7 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
   const fitGraph = () => {
     if (cyRef.current) {
       const cy = cyRef.current;
-      cy.fit(undefined, GRAPH_PADDING);
+      smartFitGraph(cy);
     }
   };
 

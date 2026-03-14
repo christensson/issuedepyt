@@ -234,6 +234,7 @@ async function fetchDepsRecursive(
       resolved: issue.resolved,
       direction: link.direction,
       linkType: link.linkType.name,
+      aggregation: !!link.linkType.aggregation,
       targetToSource: link.linkType.targetToSource,
       sourceToTarget: link.linkType.sourceToTarget,
       relation:
@@ -262,6 +263,7 @@ async function fetchDepsRecursive(
       direction: link.direction,
       targetToSource: link.targetToSource,
       sourceToTarget: link.sourceToTarget,
+      aggregation: link.aggregation,
     });
   }
 
@@ -290,7 +292,7 @@ async function fetchDepsRecursive(
         upstreamLinks: [],
         downstreamLinks: [],
         linksKnown: false,
-        showUpstream: false,
+        showUpstream: true,
         showDownstream: false,
         extraFields: link.extraFields,
       };
@@ -305,6 +307,7 @@ async function fetchDepsRecursive(
         link.direction === "BOTH" ? "BOTH" : link.direction === "INWARD" ? "OUTWARD" : "INWARD",
       targetToSource: link.targetToSource,
       sourceToTarget: link.sourceToTarget,
+      aggregation: link.aggregation,
     };
 
     const targetIssue = issues[link.id];
@@ -423,7 +426,7 @@ export async function fetchIssueAndInfo(
     downstreamLinks: [],
     linksKnown: false,
     showDownstream: false,
-    showUpstream: false,
+    showUpstream: true,
     extraFields: getExtraFields(settings?.extraCustomFields, issueInfo.customFields),
   };
 

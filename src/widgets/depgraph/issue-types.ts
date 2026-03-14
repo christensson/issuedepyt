@@ -23,6 +23,7 @@ export interface IssueLink {
   direction: DirectionType;
   targetToSource: string;
   sourceToTarget: string;
+  aggregation: boolean;
 }
 
 export interface IssuePeriod {
