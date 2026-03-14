@@ -66,9 +66,15 @@ const smartFitGraph = (cy: Core): number => {
     }
     const graphAspect = bb.w / bb.h;
     const containerAspect = containerWidth / containerHeight;
-    // Only grow if the graph is at least as tall (proportionally) as the container.
+    // When the graph is much wider than the container (width is the
+    // primary bottleneck), adding height won't improve the zoom level.
+    // However, the container should still be tall enough to render the
+    // graph's vertical extent comfortably so that the user has a usable
+    // viewport (especially when starting from the small initial height).
     if (graphAspect > containerAspect * 1.5) {
-      return 0;
+      const targetHeight = (bb.h + 2 * GRAPH_PADDING) * MIN_ZOOM_AFTER_FIT;
+      const extraHeight = Math.ceil(targetHeight - containerHeight);
+      return Math.max(0, extraHeight);
     }
     // Calculate how much taller the container needs to be.
     const scaleFactor = MIN_ZOOM_AFTER_FIT / zoom;
