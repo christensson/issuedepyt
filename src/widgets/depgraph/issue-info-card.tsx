@@ -68,7 +68,7 @@ const IssueInfoCard: React.FunctionComponent<IssueInfoCardProps> = ({ issue }) =
   }
   const toggleCollapse = () => setCollapsed(!collapsed);
 
-  const collapseControlText = collapsed ? "Expand" : "Collapse";
+  const collapseControlText = collapsed ? "Show details" : "Hide details";
   const collapseControlIcon = collapsed ? ChevronDownIcon : ChevronUpIcon;
 
   const formatValue = (x: any) => {
