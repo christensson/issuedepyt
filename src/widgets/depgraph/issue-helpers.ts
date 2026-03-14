@@ -2,6 +2,7 @@ import { IssueInfo, IssueLink, IssuePeriod } from "./issue-types.ts";
 import { FilterState } from "../../../@types/filter-state";
 import { calcBusinessDays } from "./time-utils.ts";
 
+
 export const filterIssues = (filter: FilterState, issues: Record<string, IssueInfo>) => {
   const filteredIssues = Object.fromEntries(
     Object.entries(issues).filter(([key, issue]) => {
@@ -22,14 +23,18 @@ export const filterIssues = (filter: FilterState, issues: Record<string, IssueIn
     return filteredIssues;
   }
 
-  // Remove orhan issues by first finding all relations and then only keeping
-  // issues that has both ends of the relations visible.
+  // Remove orphan issues by first finding all relations and then only keeping
+  // issues that have both ends of the relations visible.
   const relations = Object.entries(filteredIssues)
     .map(([key, issue]) => issue)
     .flatMap((issue: IssueInfo) =>
       [
-        ...(issue.showUpstream ? issue.upstreamLinks : []),
-        ...(issue.showDownstream ? issue.downstreamLinks : []),
+        ...(issue.showDownstream
+          ? issue.upstreamLinks
+          : issue.upstreamLinks.filter((link: IssueLink) => link.direction === "BOTH")),
+        ...(issue.showUpstream
+          ? issue.downstreamLinks
+          : issue.downstreamLinks.filter((link: IssueLink) => link.direction === "BOTH")),
       ].map((link: IssueLink) => ({
         from: issue.id,
         to: link.targetId,

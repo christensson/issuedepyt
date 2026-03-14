@@ -1,8 +1,8 @@
+import React, { memo, useEffect, useMemo, useState } from "react";
 import Alert from "@jetbrains/ring-ui-built/components/alert/alert";
 import Button from "@jetbrains/ring-ui-built/components/button/button";
 import { Col, Grid, Row } from "@jetbrains/ring-ui-built/components/grid/grid";
 import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
-import React, { memo, useEffect, useMemo, useState } from "react";
 import {
   defaultGraphLoadSettings,
   GraphContext,
@@ -20,14 +20,14 @@ const issue = YTApp.entity;
 const AppComponent: React.FunctionComponent = () => {
   const [settings, setSettings] = useState<Settings>({});
   const [graphVisible, setGraphVisible] = useState<boolean>(false);
-  const [graphHeight, setGraphHeight] = useState<number>(400);
+  const [graphHeight, setGraphHeight] = useState<number>(130);
   const [graphLoadSettings, setGraphLoadSettings] =
     useState<GraphLoadSettings>(defaultGraphLoadSettings);
   const [graphViewSettings, setGraphViewSettings] =
     useState<GraphViewSettings>(defaultGraphViewSettings);
   const [note, setNote] = useState<NoteProps | null>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     if (!graphVisible && settings?.autoLoadDeps) {
       console.log("Auto loading deps: Showing graph.");
       setGraphVisible(true);
