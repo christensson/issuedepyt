@@ -12,20 +12,36 @@
   "icon": "issuedepyt-icon.svg",
   "minYouTrackVersion": "2024.3.0",
   "widgets": [
+
     {
       "key": "issuedepyt-graph",
       "name": "Issue dependencies",
       "indexPath": "issuedepyt-graph/index.html",
       "extensionPoint": "ISSUE_ABOVE_ACTIVITY_STREAM",
       "description": "Visualize issue dependencies.",
-      "permissions": ["READ_ISSUE"]
+      "permissions": [
+        "READ_ISSUE"
+      ]
     },
     {
       "key": "page",
       "name": "Issue Dependencies",
       "indexPath": "issuedepyt-page/index.html",
       "extensionPoint": "MAIN_MENU_ITEM",
-      "permissions": ["READ_ISSUE"]
+      "permissions": [
+        "READ_ISSUE"
+      ]
+    },
+    {
+      "key": "issuedepyt-project-settings",
+      "name": "Issue Dependencies Config",
+      "indexPath": "issuedepyt-project-settings/index.html",
+      "extensionPoint": "PROJECT_SETTINGS",
+      "iconPath": "issuedepyt-project-settings/widget-icon.svg",
+      "description": "Configure issue dependencies settings for project.",
+      "permissions": [
+        "UPDATE_PROJECT"
+      ]
     }
   ]
 }

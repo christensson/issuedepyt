@@ -49,6 +49,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         // List every widget entry point here
+        issuedepytProjectSettings: resolve(__dirname, 'src/widgets/issuedepyt-project-settings/index.html'),
+
         issuedepytGraph: resolve(__dirname, 'src/widgets/issuedepyt-graph/index.html'),
         issuedepytPage: resolve(__dirname, 'src/widgets/issuedepyt-page/index.html'),
       }
