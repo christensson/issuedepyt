@@ -1,6 +1,15 @@
 {
   "entityTypeExtensions": [
     {
+      "entityType": "Project",
+      "properties": {
+        "settings": {
+          "type": "string",
+          "multi": false
+        }
+      }
+    },
+    {
       "entityType": "User",
       "properties": {
         "issueId": {

@@ -148,18 +148,14 @@ const getCustomFieldValue = (
 };
 
 const getExtraFields = (
-  fieldCsv: string | undefined,
+  fieldNames: string[] | undefined,
   fields: Array<{ name: string; value: any }>
 ): Array<CustomField> => {
-  const fieldNames = fieldCsv ? fieldCsv.split(",").map((x) => x.trim()) : [];
-  const customFields = fieldNames.map((name) => {
-    return {
-      name,
-      value: getCustomFieldValue(name, fields),
-    };
-  });
-
-  return customFields;
+  if (!fieldNames?.length) return [];
+  return fieldNames.map((name) => ({
+    name,
+    value: getCustomFieldValue(name, fields),
+  }));
 };
 
 async function fetchDepsRecursive(

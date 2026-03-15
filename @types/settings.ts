@@ -6,9 +6,9 @@ export type Settings = {
   startDateField?: string;
   dueDateField?: string;
   estimationField?: string;
-  extraCustomFields?: string;
-  upstreamRelations?: string;
-  downstreamRelations?: string;
+  extraCustomFields?: string[];
+  upstreamRelations?: string[];
+  downstreamRelations?: string[];
   autoLoadDeps?: boolean;
   maxRecursionDepth?: number;
 };

@@ -114,11 +114,11 @@ const calcGraphSizeFromIssues = (issueData: { [key: string]: IssueInfo }): numbe
   return sizeEntry ? sizeEntry.height : 400;
 };
 
-const parseRelationList = (relations: string | undefined): Array<Relation> => {
-  if (relations === undefined) {
+const parseRelationList = (relations: string[] | undefined): Array<Relation> => {
+  if (!relations?.length) {
     return [];
   }
-  return relations.split(",").map((relation: string) => {
+  return relations.map((relation: string) => {
     const [direction, type] = relation.split(":");
     return {
       direction: direction.trim().toUpperCase() as DirectionType,

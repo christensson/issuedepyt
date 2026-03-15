@@ -1,5 +1,13 @@
 // To learn more, see https://www.jetbrains.com/help/youtrack/devportal-apps/apps-reference-http-handlers.html
 
+const splitCsv = (value) =>
+  value
+    ? value
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean)
+    : [];
+
 exports.httpHandler = {
   endpoints: [
     {
@@ -20,9 +28,9 @@ exports.httpHandler = {
           startDateField: props.startDateField,
           dueDateField: props.dueDateField,
           estimationField: props.estimationField,
-          extraCustomFields: props.extraCustomFields,
-          upstreamRelations: props.upstreamRelations,
-          downstreamRelations: props.downstreamRelations,
+          extraCustomFields: parseArrayProp(props.extraCustomFields),
+          upstreamRelations: parseArrayProp(props.upstreamRelations),
+          downstreamRelations: parseArrayProp(props.downstreamRelations),
           // Global settings are available in ctx.settings.
           autoLoadDeps: ctx.settings.autoLoadDeps,
           maxRecursionDepth: ctx.settings.maxRecursionDepth,
