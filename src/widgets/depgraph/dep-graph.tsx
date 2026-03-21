@@ -347,8 +347,9 @@ const getGraphObjects = (
           target: isParentLink ? issueId : link.targetId,
           label,
           title: label,
-          arrowFrom: link.direction !== "BOTH",
-          diamondTo: !!link.aggregation,
+          sourceArrow: link.direction === "INWARD" ? "triangle" : "none",
+          targetArrow: link.direction === "OUTWARD" ? "triangle" : "none",
+          diamondEnd: link.aggregation ? (link.direction === "OUTWARD" ? "source" : "target") : "none",
         },
       });
     }
@@ -555,16 +556,18 @@ const DepGraph: React.FunctionComponent<DepGraphProps> = ({
               "text-background-color": "#ffffff",
               "text-background-opacity": 0.8,
               "text-background-padding": "2px",
+              "source-arrow-shape": "data(sourceArrow)" as any,
+              "target-arrow-shape": "data(targetArrow)" as any,
             },
           },
           {
-            selector: "edge[?arrowFrom]",
+            selector: 'edge[diamondEnd = "source"]',
             style: {
-              "source-arrow-shape": "triangle",
+              "source-arrow-shape": "diamond",
             },
           },
           {
-            selector: "edge[?diamondTo]",
+            selector: 'edge[diamondEnd = "target"]',
             style: {
               "target-arrow-shape": "diamond",
             },
