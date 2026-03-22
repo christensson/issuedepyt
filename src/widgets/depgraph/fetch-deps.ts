@@ -1,13 +1,13 @@
+import type { FieldInfo, FieldInfoField } from "../../../@types/field-info";
 import type { HostAPI } from "../../../@types/globals";
 import type { Settings } from "../../../@types/settings";
-import type { FieldInfo, FieldInfoField } from "../../../@types/field-info";
 import type {
+  CustomField,
   IssueInfo,
   IssueLink,
+  IssuePeriod,
   Relation,
   Relations,
-  CustomField,
-  IssuePeriod,
 } from "./issue-types.ts";
 
 export type FollowDirection = "upstream" | "downstream";
@@ -68,7 +68,7 @@ async function fetchIssueLinks(host: HostAPI, issueID: string): Promise<any> {
 
 const getCustomField = (
   name: string | undefined,
-  fields: Array<{ name: string; value: any }>
+  fields: Array<{ name: string; value: any }>,
 ): any => {
   if (name === undefined) {
     return null;
@@ -79,7 +79,7 @@ const getCustomField = (
 
 const getCustomFieldValue = (
   name: string | undefined,
-  fields: Array<{ name: string; value: any }>
+  fields: Array<{ name: string; value: any }>,
 ): any => {
   const field = getCustomField(name, fields);
   if (!field || field.value == null) {
@@ -149,7 +149,7 @@ const getCustomFieldValue = (
 
 const getExtraFields = (
   fieldCsv: string | undefined,
-  fields: Array<{ name: string; value: any }>
+  fields: Array<{ name: string; value: any }>,
 ): Array<CustomField> => {
   const fieldNames = fieldCsv ? fieldCsv.split(",").map((x) => x.trim()) : [];
   const customFields = fieldNames.map((name) => {
@@ -170,7 +170,7 @@ async function fetchDepsRecursive(
   relations: Relations,
   followDirs: FollowDirections,
   settings: Settings,
-  issues: { [key: string]: IssueInfo }
+  issues: { [key: string]: IssueInfo },
 ): Promise<any> {
   if (depth == maxDepth + 1) {
     return;
@@ -205,7 +205,7 @@ async function fetchDepsRecursive(
     return followLinks.some(
       (relation) =>
         link.direction === relation.direction &&
-        link.linkType.name.toLowerCase() === relation.type.toLowerCase()
+        link.linkType.name.toLowerCase() === relation.type.toLowerCase(),
     );
   });
 
@@ -234,23 +234,24 @@ async function fetchDepsRecursive(
       resolved: issue.resolved,
       direction: link.direction,
       linkType: link.linkType.name,
+      aggregation: !!link.linkType.aggregation,
       targetToSource: link.linkType.targetToSource,
       sourceToTarget: link.linkType.sourceToTarget,
       relation:
         link.direction == "INWARD" ? link.linkType.targetToSource : link.linkType.sourceToTarget,
       depth: depth,
       extraFields: getExtraFields(settings?.extraCustomFields, issue.customFields),
-    }))
+    })),
   );
   for (const link of linksFlat) {
     const isUpstream = relations.upstream.some(
       (relation) =>
         link.direction === relation.direction &&
-        link.linkType.toLowerCase() === relation.type.toLowerCase()
+        link.linkType.toLowerCase() === relation.type.toLowerCase(),
     );
     const linksList = isUpstream ? issue.upstreamLinks : issue.downstreamLinks;
     const linkExist = linksList.some(
-      (x) => link.id === x.targetId && link.direction === x.direction && link.linkType === x.type
+      (x) => link.id === x.targetId && link.direction === x.direction && link.linkType === x.type,
     );
     if (linkExist) {
       continue;
@@ -262,6 +263,7 @@ async function fetchDepsRecursive(
       direction: link.direction,
       targetToSource: link.targetToSource,
       sourceToTarget: link.sourceToTarget,
+      aggregation: link.aggregation,
     });
   }
 
@@ -269,7 +271,7 @@ async function fetchDepsRecursive(
     const isUpstream = relations.upstream.some(
       (relation) =>
         link.direction === relation.direction &&
-        link.linkType.toLowerCase() === relation.type.toLowerCase()
+        link.linkType.toLowerCase() === relation.type.toLowerCase(),
     );
 
     if (!(link.id in issues)) {
@@ -305,6 +307,7 @@ async function fetchDepsRecursive(
         link.direction === "BOTH" ? "BOTH" : link.direction === "INWARD" ? "OUTWARD" : "INWARD",
       targetToSource: link.targetToSource,
       sourceToTarget: link.sourceToTarget,
+      aggregation: link.aggregation,
     };
 
     const targetIssue = issues[link.id];
@@ -313,7 +316,7 @@ async function fetchDepsRecursive(
       (x) =>
         mirroredLink.targetId === x.targetId &&
         mirroredLink.direction === x.direction &&
-        mirroredLink.type === x.type
+        mirroredLink.type === x.type,
     );
     if (!mirroredLinkExist) {
       mirroredLinksList.push(mirroredLink);
@@ -333,18 +336,18 @@ async function fetchDepsRecursive(
   const idsToFetch: Array<string> = [];
   if (followDirs.includes("upstream")) {
     const newLinks = issue.upstreamLinks.filter(
-      (link: IssueLink) => !prevIssueUpstreamLinks.some((x) => isSameLink(x, link))
+      (link: IssueLink) => !prevIssueUpstreamLinks.some((x) => isSameLink(x, link)),
     );
     idsToFetch.push(...newLinks.map((link: IssueLink) => link.targetId));
   }
   if (followDirs.includes("downstream")) {
     const newLinks = issue.downstreamLinks.filter(
-      (link: IssueLink) => !prevIssueDownstreamLinks.some((x) => isSameLink(x, link))
+      (link: IssueLink) => !prevIssueDownstreamLinks.some((x) => isSameLink(x, link)),
     );
     idsToFetch.push(...newLinks.map((link: IssueLink) => link.targetId));
   }
   const promises = idsToFetch.map((id: string) =>
-    fetchDepsRecursive(host, id, depth + 1, maxDepth, relations, followDirs, settings, issues)
+    fetchDepsRecursive(host, id, depth + 1, maxDepth, relations, followDirs, settings, issues),
   );
   await Promise.all(promises);
   return;
@@ -353,7 +356,7 @@ async function fetchDepsRecursive(
 export async function fetchIssueAndInfo(
   host: HostAPI,
   issueId: string,
-  settings: Settings
+  settings: Settings,
 ): Promise<{ issue: IssueInfo; fieldInfo: FieldInfo }> {
   const issueInfo = await fetchIssueInfo(host, issueId);
 
@@ -373,7 +376,7 @@ export async function fetchIssueAndInfo(
               background: value.color.background,
               foreground: value.color.foreground,
             },
-          ])
+          ]),
         ),
       },
     });
@@ -391,7 +394,7 @@ export async function fetchIssueAndInfo(
               background: value.color.background,
               foreground: value.color.foreground,
             },
-          ])
+          ]),
         ),
       },
     });
@@ -436,7 +439,7 @@ export async function fetchDeps(
   maxDepth: number,
   relations: Relations,
   followDirs: FollowDirections,
-  settings: Settings
+  settings: Settings,
 ): Promise<{ [key: string]: IssueInfo }> {
   let issues = {
     [issue.id]: issue,
@@ -453,7 +456,7 @@ export async function fetchDepsAndExtend(
   maxDepth: number,
   relations: Relations,
   followDirs: FollowDirections,
-  settings: Settings
+  settings: Settings,
 ): Promise<{ [key: string]: IssueInfo }> {
   if (!(issueId in issues)) {
     console.log(`Failed to fetch issues for ${issueId}: issue unknown`);
@@ -473,7 +476,7 @@ export async function fetchDepsAndExtend(
     relations,
     followDirs,
     settings,
-    newIssues
+    newIssues,
   );
 
   return newIssues;
