@@ -13,7 +13,7 @@ import type { SelectItem } from "@jetbrains/ring-ui-built/components/select/sele
 import Select from "@jetbrains/ring-ui-built/components/select/select";
 import Toggle, { Size as ToggleSize } from "@jetbrains/ring-ui-built/components/toggle/toggle";
 import Tooltip from "@jetbrains/ring-ui-built/components/tooltip/tooltip";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { FieldInfo, FieldInfoKey } from "../../../@types/field-info";
 import type { FilterState } from "../../../@types/filter-state";
 import type { FollowSettings } from "../../../@types/follow-settings";
@@ -32,7 +32,7 @@ import DepGraph from "./dep-graph";
 import DepTimeline from "./dep-timeline";
 import DraggableHeightControl from "./draggable-height-control";
 import exportData from "./export";
-import type { FollowDirection, FollowDirections } from "./fetch-deps";
+import type { FollowDirections } from "./fetch-deps";
 import { fetchDeps, fetchDepsAndExtend, fetchIssueAndInfo } from "./fetch-deps";
 import FilterDropdownMenu, { createFilterState } from "./filter-dropdown-menu";
 import { storeContextGraphSettings } from "./graph-context-ops";
@@ -57,42 +57,12 @@ interface IssueDepsProps {
 
 const DEFAULT_MAX_DEPTH = 6;
 
-const GRAPH_HEIGHT_MARGIN = 40;
-const GRAPH_CONTROLS_HEIGHT_MIN_VALUE = 200;
+const GRAPH_CONTROLS_HEIGHT_MIN_VALUE = 230;
 
-type GRAPH_SIZE_ITEM = {
-  height: number;
-  limits?: {
-    maxDepth: number;
-    maxCount: number;
-  };
-};
-const GRAPH_SIZE: Array<GRAPH_SIZE_ITEM> = [
-  {
-    height: 130,
-    limits: {
-      maxDepth: 0,
-      maxCount: 2,
-    },
-  },
-  {
-    height: 260,
-    limits: {
-      maxDepth: 1,
-      maxCount: 10,
-    },
-  },
-  {
-    height: 390,
-    limits: {
-      maxDepth: 3,
-      maxCount: 20,
-    },
-  },
-  {
-    height: 520,
-  },
-];
+// Must match --estimated-window-overhead in app.css.
+const GRAPH_WINDOW_OVERHEAD = 316;
+const GRAPH_INITIAL_HEIGHT = 100;
+const GRAPH_HEIGHT_MAX = 1400;
 
 const getNumIssues = (issueData: { [key: string]: IssueInfo }): number => {
   return Object.keys(issueData).length;
@@ -104,27 +74,29 @@ const getMaxDepth = (issueData: { [key: string]: IssueInfo }): number => {
     .reduce((acc, val) => Math.max(acc, val), 0);
 };
 
-const calcGraphSizeFromIssues = (issueData: { [key: string]: IssueInfo }): number => {
-  const count = getNumIssues(issueData);
-  const maxDepth = getMaxDepth(issueData);
-  const sizeEntry = GRAPH_SIZE.find((value) => {
-    const limits = value?.limits;
-    return limits === undefined || (maxDepth <= limits.maxDepth && count <= limits.maxCount);
-  });
-  return sizeEntry ? sizeEntry.height : 400;
-};
-
 const parseRelationList = (relations: string | undefined): Array<Relation> => {
   if (relations === undefined) {
     return [];
   }
+  const normalizeDirection = (value: string): DirectionType => {
+    const normalized = value.trim().toUpperCase();
+    if (normalized === "OUTWARD" || normalized === "INWARD" || normalized === "BOTH") {
+      return normalized as DirectionType;
+    }
+    return "BOTH";
+  };
+
+  const normalizeType = (value: string): string => {
+    return value.trim();
+  };
+
   return relations.split(",").map((relation: string) => {
     const [direction, type] = relation.split(":");
     return {
-      direction: direction.trim().toUpperCase() as DirectionType,
-      type: type.trim(),
+      direction: normalizeDirection(direction || ""),
+      type: normalizeType(type || ""),
     };
-  });
+  }).filter((relation) => relation.type.length > 0);
 };
 
 const getRelations = (settings: Settings): Relations | null => {
@@ -160,11 +132,13 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     showOrphans: false,
     showWhenLinksUnknown: true,
   });
-  const [graphNodeControlsOpen, setGraphNodeControlsOpen] = useState<boolean>(true);
+  const [graphNodeControlsOpen, setGraphNodeControlsOpen] = useState<boolean>(false);
+  const initialLoadDone = useRef<boolean>(false);
+  const showMenuOnFirstGrow = useRef<boolean>(true);
 
   // Auto-collapse the floating menu when the graph is shrunk to its smallest size.
   useEffect(() => {
-    if (graphHeight <= GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
+    if (graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
       setGraphNodeControlsOpen(false);
     }
   }, [graphHeight]);
@@ -175,8 +149,31 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   };
 
   const activateGraphHeight = (height: number) => {
+    if (showMenuOnFirstGrow.current && height > GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
+      showMenuOnFirstGrow.current = false;
+      setGraphNodeControlsOpen(true);
+    }
     setGraphHeight(height);
+    const actualHeight = height + GRAPH_WINDOW_OVERHEAD;
+    document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
   };
+
+  const growGraphHeight = useCallback((neededHeight: number) => {
+    const growth = Math.ceil(neededHeight);
+    setGraphHeight((prev) => {
+      const newHeight = Math.min(prev + growth, GRAPH_HEIGHT_MAX);
+      if (newHeight > prev) {
+        const actualHeight = newHeight + GRAPH_WINDOW_OVERHEAD;
+        document.documentElement.style.setProperty("--window-height", `${actualHeight}px`);
+        if (showMenuOnFirstGrow.current && newHeight >= GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
+          showMenuOnFirstGrow.current = false;
+          setGraphNodeControlsOpen(true);
+        }
+        return newHeight;
+      }
+      return prev;
+    });
+  }, []);
 
   const getFollowDirections = (followSettings: FollowSettings): FollowDirections => {
     const followDirs: FollowDirections = [];
@@ -190,14 +187,11 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   };
 
   const refreshData = useCallback(async () => {
-    const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
-    if (
-      followDirs.length === 0 ||
-      (relations.upstream.length === 0 && relations.downstream.length === 0)
-    ) {
-      console.log(`Not fetching deps for root ${issueId}, no directions or relations yet...`);
+    if (relations.upstream.length === 0 && relations.downstream.length === 0) {
+      console.log(`Not fetching deps for root ${issueId}, no relations configured yet...`);
       return;
     }
+    const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
     setNote(createLoadingNote("Loading dependencies..."));
     console.log(`Fetching deps for root ${issueId}...`);
 
@@ -209,12 +203,21 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     const issues = await fetchDeps(host, issueInfo, maxDepth, relations, followDirs, settings);
     setFilterState(createFilterState(fieldInfoData));
     setFieldInfo(fieldInfoData);
-    if (useDynamicGraphHeight) {
-      const height = calcGraphSizeFromIssues(issues);
-      setGraphHeight(height);
+    if (useDynamicGraphHeight && !initialLoadDone.current) {
+      activateGraphHeight(GRAPH_INITIAL_HEIGHT);
     }
+    initialLoadDone.current = true;
     console.log("Fetched issues from root:", issues);
-    setIssueData(issues);
+    // Preserve user-toggled showUpstream/showDownstream from previous data.
+    setIssueData((prevIssueData) => {
+      for (const id of Object.keys(issues)) {
+        if (id in prevIssueData) {
+          issues[id].showUpstream = prevIssueData[id].showUpstream;
+          issues[id].showDownstream = prevIssueData[id].showDownstream;
+        }
+      }
+      return issues;
+    });
     // Remove highlight.
     setHighlightedNodes(null);
     // Set selected node to the root issue if none selected already.
@@ -224,7 +227,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   }, [host, issueId, maxDepth, relations, settings, graphLoadSettings, useDynamicGraphHeight]);
 
   const loadIssueDeps = useCallback(
-    async (issueId: string, direction: FollowDirection | null = null) => {
+    async (issueId: string) => {
       console.log(`Fetching deps for ${issueId}...`);
       setNote(createLoadingNote("Loading dependencies..."));
       const followDirs: FollowDirections = getFollowDirections(graphLoadSettings.followSettings);
@@ -264,7 +267,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
   );
 
   useEffect(() => {
-    if (settings?.maxRecursionDepth != undefined) {
+    if (settings?.maxRecursionDepth != null) {
       setMaxDepth(settings.maxRecursionDepth);
     }
 
@@ -276,7 +279,20 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
 
   useEffect(() => {
     refreshData();
-  }, [host, issueId, maxDepth, relations]);
+  }, [host, issueId, maxDepth, relations, graphLoadSettings]);
+
+  // Auto-load root node's relations on initial graph loading if they weren't
+  // loaded by refreshData (e.g. due to timing or configuration edge cases).
+  useEffect(() => {
+    if (
+      initialLoadDone.current &&
+      issueId in issueData &&
+      !issueData[issueId].linksKnown &&
+      relations.upstream.length + relations.downstream.length > 0
+    ) {
+      loadIssueDeps(issueId);
+    }
+  }, [issueId, issueData, relations, loadIssueDeps]);
 
   const treeDirectionSelectItems: Array<SelectItem<{ key: HierarchicalDirection }>> = [
     {
@@ -301,7 +317,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
     <div>
       {Object.keys(issueData).length === 0 && (
         // Reserve space on initial load since note is shown absolute at top.
-        <div style={{ height: "80px" }} />
+        <div style={{ height: "80px" }}/>
       )}
       <div className="dep-toolbar">
         {selectedNode !== null && selectedNode in issueData && (
@@ -384,24 +400,24 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 )}.`}
                 theme={Theme.LIGHT}
               >
-                <Icon glyph={InfoIcon} />
+                <Icon glyph={InfoIcon}/>
               </Tooltip>
             </span>
             <Tooltip title="Reload data" theme={Theme.LIGHT}>
-              <Button onClick={refreshData} icon={UpdateIcon} />
+              <Button onClick={refreshData} icon={UpdateIcon}/>
             </Tooltip>
             <SearchDropdownMenu
               fieldInfo={fieldInfo}
               issueData={issueData}
               settings={settings}
               setHighlightedNodes={setHighlightedNodes}
-              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
+              maxHeight={graphHeight}
             />
             <FilterDropdownMenu
               fieldInfo={fieldInfo}
               filterState={filterState}
               setFilterState={setFilterState}
-              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
+              maxHeight={graphHeight}
             />
             {!isSinglePageApp && (
               <Tooltip title="Open graph in full-screen page..." theme={Theme.LIGHT}>
@@ -429,7 +445,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                   layoutOptions: { ...prev.layoutOptions, maxNodeWidth },
                 }))
               }
-              maxHeight={graphHeight - GRAPH_HEIGHT_MARGIN}
+              maxHeight={graphHeight}
               setUseHierarchicalLayout={(hierarchical: boolean) =>
                 setGraphViewSettings((prev) => ({
                   ...prev,
@@ -515,6 +531,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           height={graphHeight}
           setSelectedNode={selectNode}
           onOpenNode={openNode}
+          onRequestGrow={!isSinglePageApp ? growGraphHeight : undefined}
         >
           <div className={"dep-graph-node-controls"}>
             {graphNodeControlsOpen && (
@@ -646,20 +663,18 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
                 title={
                   graphNodeControlsOpen
                     ? undefined
-                    : !graphNodeControlsOpen &&
-                        graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN
-                      ? "Increase graph height to expand controls"
-                      : "Expand graph controls"
+                    : "Expand graph controls"
                 }
                 theme={Theme.LIGHT}
               >
                 <Button
                   inline
-                  disabled={
-                    !graphNodeControlsOpen &&
-                    graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE + GRAPH_HEIGHT_MARGIN
-                  }
-                  onClick={() => setGraphNodeControlsOpen((prev) => !prev)}
+                  onClick={() => {
+                    if (!graphNodeControlsOpen && graphHeight < GRAPH_CONTROLS_HEIGHT_MIN_VALUE) {
+                      activateGraphHeight(GRAPH_CONTROLS_HEIGHT_MIN_VALUE);
+                    }
+                    setGraphNodeControlsOpen((prev) => !prev);
+                  }}
                   iconRight={graphNodeControlsOpen ? DoubleChevronRight : DoubleChevronLeft}
                   ghost
                 >
@@ -671,17 +686,25 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
           {!isSinglePageApp && (
             <div className={"dep-graph-height-control"}>
               <DraggableHeightControl
-                minValue={GRAPH_CONTROLS_HEIGHT_MIN_VALUE}
-                maxValue={1400}
+                minValue={GRAPH_INITIAL_HEIGHT}
+                maxValue={GRAPH_HEIGHT_MAX}
                 value={graphHeight}
-                onChange={setGraphHeight}
+                onChange={activateGraphHeight}
               />
             </div>
           )}
         </DepGraph>
       )}
       {selectedNode !== null && isSelectedNodeAnIssue(selectedNode, issueData) && (
-        <IssueInfoCard issue={issueData[selectedNode]} />
+        <IssueInfoCard issue={issueData[selectedNode]}/>
+      )}
+      {!isSinglePageApp && Object.keys(issueData).length === 0 && (
+        <DraggableHeightControl
+          minValue={GRAPH_INITIAL_HEIGHT}
+          maxValue={GRAPH_HEIGHT_MAX}
+          value={graphHeight}
+          onChange={activateGraphHeight}
+        />
       )}
     </div>
   );
