@@ -665,9 +665,9 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
             <div className={"dep-graph-height-control"}>
               <DraggableHeightControl
                 minValue={GRAPH_INITIAL_HEIGHT}
-                maxValue={1400}
+                maxValue={GRAPH_HEIGHT_MAX}
                 value={graphHeight}
-                onChange={setGraphHeight}
+                onChange={activateGraphHeight}
               />
             </div>
           )}
@@ -676,7 +676,7 @@ const IssueDeps: React.FunctionComponent<IssueDepsProps> = ({
       {selectedNode !== null && isSelectedNodeAnIssue(selectedNode, issueData) && (
         <IssueInfoCard issue={issueData[selectedNode]}/>
       )}
-      {!isSinglePageApp && (
+      {!isSinglePageApp && Object.keys(issueData).length === 0 && (
         <DraggableHeightControl
           minValue={GRAPH_INITIAL_HEIGHT}
           maxValue={GRAPH_HEIGHT_MAX}

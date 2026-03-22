@@ -344,20 +344,20 @@ const getGraphObjects = (
 
   // For each node-pair with multiple edges, pre-compute the vertical label
   // offset so that horizontal labels are evenly centered around the edge midpoint.
-  const pairEdges: { [pairKey: string]: ElementDefinition[] } = {};
-  for (const edge of edges) {
-    const s = edge.data!.source;
-    const t = edge.data!.target;
-    const pairKey = s < t ? `${s}|${t}` : `${t}|${s}`;
-    if (!pairEdges[pairKey]) pairEdges[pairKey] = [];
-    pairEdges[pairKey].push(edge);
-  }
-  for (const group of Object.values(pairEdges)) {
-    const count = group.length;
-    for (let i = 0; i < count; i++) {
-      group[i].data!.textMarginY = layoutOptions.horizontalEdgeLabels
-        ? (i - (count - 1) / 2) * EDGE_FONT_SIZE * 1.7  // 1.7 is the best compromise so that labels don't overlap
-        : 0;
+  if (layoutOptions.horizontalEdgeLabels) {
+    const pairEdges: { [pairKey: string]: ElementDefinition[] } = {};
+    for (const edge of edges) {
+      const s = edge.data!.source;
+      const t = edge.data!.target;
+      const pairKey = s < t ? `${s}|${t}` : `${t}|${s}`;
+      if (!pairEdges[pairKey]) pairEdges[pairKey] = [];
+      pairEdges[pairKey].push(edge);
+    }
+    for (const group of Object.values(pairEdges)) {
+      const count = group.length;
+      for (let i = 0; i < count; i++) {
+        group[i].data!.textMarginY = (i - (count - 1) / 2) * EDGE_FONT_SIZE * 1.7;  // 1.7 is the best compromise so that labels don't overlap
+      }
     }
   }
 
