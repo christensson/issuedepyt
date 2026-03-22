@@ -7,8 +7,8 @@
     "name": "Marcus Christensson",
     "url": "https://github.com/christensson/issuedepyt"
   },
-  "version": "1.7.2",
-  "changeNotes": "Version 1.7.2:<br/>- Fix graph double-click opening multiple tickets issue.<br/>- Add option to render edge labels horizontally.",
+  "version": "1.8.0",
+  "changeNotes": "Version 1.8.0:<br/>- Add save of settings for current user. Note! That opening full-screen from an issue automatically stores the settings to be able to load the full-screen graph with the same settings.<br/>- Add smarter graph autosizing (contribution).<br/>- Add graph controls auto-collapse when space insufficient (contribution).<br/>- Redesign graph sizing into a draggable bar.<br/>- Fix view of version bundle custom fields in issue info.", 
   "icon": "issuedepyt-icon.svg",
   "minYouTrackVersion": "2024.3.0",
   "widgets": [
